@@ -248,7 +248,7 @@ fn cleanup_h1_and_get_meta(doc: &mut scraper::Html, fm: &mut FrontMatter) {
 
         // Summary is all the text preceding <h1>
         let mut summary = String::new();
-        for sibling in h1.prev_siblings() {
+        for sibling in h1.prev_siblings().collect::<Vec<_>>().into_iter().rev() { // prev_siblings iterates in reverse order
             if let Some(elt) = scraper::ElementRef::wrap(sibling) {
                 summary.push_str(&elt.text().collect::<Vec<_>>().join(" "));
                 summary.push_str(" ");
