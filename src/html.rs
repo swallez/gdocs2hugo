@@ -1,11 +1,9 @@
-use html5ever::serialize::HtmlSerializer;
+use html5ever::serialize::{HtmlSerializer, Serialize};
 use html5ever::serialize::SerializeOpts;
-use markup5ever::serialize::AttrRef;
-use markup5ever::serialize::Serialize;
-use markup5ever::serialize::Serializer;
-use markup5ever::serialize::TraversalScope;
-use markup5ever::QualName;
-use scraper::element_ref::ElementRef;
+use html5ever::serialize::AttrRef;
+use html5ever::serialize::Serializer;
+use html5ever::serialize::TraversalScope;
+use html5ever::QualName;
 use std::io;
 
 /// A DOM serializer that produces a stable output.
@@ -59,8 +57,7 @@ pub fn stable_html(doc: &scraper::Html) -> anyhow::Result<String> {
     let mut ser = StableHtmlSerializer(HtmlSerializer::new(&mut buf, opts));
 
     let root = doc.root_element();
-    // Need fully qualified call to disambiguate overloaded serialize() method
-    <ElementRef as Serialize>::serialize(&root, &mut ser, TraversalScope::IncludeNode)?;
+    root.serialize( &mut ser, TraversalScope::IncludeNode)?;
 
     Ok(String::from_utf8(buf).unwrap())
 }

@@ -42,6 +42,7 @@ pub enum Commands {
         #[structopt(long)]
         all: bool,
     },
+    Gdoc,
 }
 
 //----- Config file
@@ -63,7 +64,11 @@ fn default_download_dir() -> PathBuf {
 impl Config {
     pub fn read(path: &Path) -> anyhow::Result<Config> {
         let file = File::open(path).with_context(|| format!("Failed to open {:?}", path))?;
-        let config = serde_yaml::from_reader(file).with_context(|| format!("Failed to read {:?}", path))?;
+        let mut config: Config = serde_yaml::from_reader(file).with_context(|| format!("Failed to read {:?}", path))?;
+        // Paths in the config are relative to the config file location.
+        let config_dir = path.parent().unwrap();
+        config.download_dir = config_dir.join(config.download_dir);
+        config.hugo_site_dir = config_dir.join(config.hugo_site_dir);
         Ok(config)
     }
 }

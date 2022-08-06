@@ -5,19 +5,26 @@ pub fn import_image(url: &str, hugo_dir: &Path) -> anyhow::Result<String> {
     // gdocs image URLs are like https://lh3.googleusercontent.com/<some long id>
 
     if !url.contains("googleusercontent.com") {
-        print!("Found a regular image link (!?): {}", url);
+        println!("Found a regular image link (!?): {}", url);
         return Ok(url.to_string());
     }
 
     let name = url.rsplit('/').next().unwrap();
 
+    // Have we already processed this image?
+    // Note: we previously used the globwalk crate here, but it's overkill
     let dir_path = hugo_dir.join(format!("static/post-images/{}", name));
-    if dir_path.exists() {
-        let walker = globwalk::GlobWalkerBuilder::new(dir_path, "image.*").build()?;
-        let first_file = walker.into_iter().next().unwrap()?;
-        let image_name = first_file.file_name().to_str().unwrap();
+    if dir_path.is_dir() {
+        for entry in fs::read_dir(&dir_path)? {
+            let path = entry?.path();
+            let file_name = path
+                .file_name().unwrap()
+                .to_string_lossy();
 
-        return Ok(format!("/post-images/{}/{}", name, image_name));
+            if file_name.starts_with("image.") {
+                return Ok(format!("/post-images/{}/{}", name, file_name))
+            }
+        }
     }
 
     // New image: download it
@@ -64,7 +71,7 @@ fn compress_png(bytes: bytes::Bytes) -> anyhow::Result<bytes::Bytes> {
     let img = image::load(cursor, image::ImageFormat::Png)?;
 
     let mut result: Vec<u8> = Vec::new();
-    let mut encoder = image::jpeg::JpegEncoder::new_with_quality(&mut result, 75);
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut result, 75);
     encoder.encode_image(&img)?;
 
     println!("Compressed {} kB to {} kB", bytes.len() / 1024, result.len() / 1024);

@@ -1,8 +1,8 @@
 use chrono::TimeZone;
 use chrono::Utc;
-use gdocs2hugo::publish;
-use gdocs2hugo::DateTimeWithDefault;
-use gdocs2hugo::DocData;
+use gdocs2hugo::{publish, SiteData};
+use gdocs2hugo::gdocs::DateTimeWithDefault;
+use gdocs2hugo::gdocs::DocData;
 use std::path::Path;
 
 /// Generate a test page and compare the result with the expected version.
@@ -33,17 +33,17 @@ fn publish_test() {
         ),
         weight: None,
         update_date: None,
-        gdoc_pub_url: "https://docs.google.com/document/d/e/2PACX-1vR6BpAlYnSiCdEELnNtnnK0rejYCDpn6rX-jumwZ9zQbacHiO3TC6Uq6KbC0vhet1Brw2f9Udk6qWM6/pub".into()
+        gdoc_pub_url: "https://docs.google.com/document/d/e/2PACX-1vR6BpAlYnSiCdEELnNtnnK0rejYCDpn6rX-jumwZ9zQbacHiO3TC6Uq6KbC0vhet1Brw2f9Udk6qWM6/pub".into(),
+        gdoc_url: None,
+        download_path: Default::default()
     };
-
-    let pages = std::collections::HashMap::new();
 
     // Publish this doc
     publish::publish_doc(
         record,
         Path::new("tests/data/gdoc"),
         Path::new("tests/data/site"),
-        &pages,
+        &SiteData::default(),
         false,
     )
     .unwrap();

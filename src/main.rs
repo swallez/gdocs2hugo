@@ -20,13 +20,19 @@ fn main() -> anyhow::Result<()> {
 fn main0(args: RootCommand, config: Config) -> anyhow::Result<()> {
     match args.command {
         Download { all } => {
-            download::download(&config.toc_spreadsheet_url, &config.download_dir, all)?;
+            gdocs::download(&config.toc_spreadsheet_url, &config.download_dir, all)?;
         }
         Publish { download, all } => {
             if download {
-                download::download(&config.toc_spreadsheet_url, &config.download_dir, all)?;
+                gdocs::download(&config.toc_spreadsheet_url, &config.download_dir, all)?;
             }
             publish::publish(&config.download_dir, &config.hugo_site_dir, config.default_author, all)?;
+        }
+        Gdoc => {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(gdocs_api::download())?;
         }
     }
 
