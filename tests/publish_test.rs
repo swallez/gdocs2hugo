@@ -1,9 +1,10 @@
 use chrono::TimeZone;
 use chrono::Utc;
-use gdocs2hugo::{publish, SiteData};
-use gdocs2hugo::gdocs::DateTimeWithDefault;
-use gdocs2hugo::gdocs::DocData;
+use gdocs2hugo::SiteData;
+use gdocs2hugo::gdocs_site::DateTimeWithDefault;
+use gdocs2hugo::gdocs_site::DocData;
 use std::path::Path;
+use gdocs2hugo::from_web_pub::publish;
 
 /// Generate a test page and compare the result with the expected version.
 ///

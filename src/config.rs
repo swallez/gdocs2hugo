@@ -2,47 +2,64 @@ use anyhow::Context;
 use std::fs::File;
 use std::path::Path;
 use std::path::PathBuf;
-use structopt::StructOpt;
+use clap::Parser;
 
 //----- Command line parameters
 
 /// From Google Docs to Hugo
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 pub struct RootCommand {
     /// Path to the config file
-    #[structopt(global = true, long, default_value = "gdocs2hugo.yml")]
+    #[clap(global = true, long, default_value = "gdocs2hugo.yml")]
     pub config: PathBuf,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     pub command: Commands,
 }
 
 impl RootCommand {
-    // Avoids importing StructOpt in main and solves some IntelliJ type inference issue
+    // Avoids importing Clap in main and solves some IntelliJ type inference issue
     pub fn read() -> RootCommand {
         RootCommand::from_args()
     }
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(Parser, Debug)]
 pub enum Commands {
     /// Download gdocs content
     Download {
         /// Download all pages (ignore publication status)
-        #[structopt(long)]
+        #[clap(long)]
         all: bool,
     },
 
     /// Publish downloaded gdocs content to the Hugo content dir
     Publish {
         /// Download gdocs content before publishing
-        #[structopt(long)]
+        #[clap(long)]
         download: bool,
         /// Publish all pages (ignore publication status)
-        #[structopt(long)]
+        #[clap(long)]
         all: bool,
     },
     Gdoc,
+
+    /// Download gdocs content
+    Download2 {
+        /// Download all pages (ignore publication status)
+        #[clap(long)]
+        all: bool,
+    },
+
+    /// Publish downloaded gdocs content to the Hugo content dir
+    Publish2 {
+        /// Download gdocs content before publishing
+        #[clap(long)]
+        download: bool,
+        /// Publish all pages (ignore publication status)
+        #[clap(long)]
+        all: bool,
+    },
 }
 
 //----- Config file
@@ -53,6 +70,7 @@ pub struct Config {
     #[serde(default = "default_download_dir")]
     pub download_dir: PathBuf,
     pub hugo_site_dir: PathBuf,
+    pub credentials: Option<PathBuf>,
     pub concurrency: Option<usize>,
     pub default_author: Option<String>,
 }

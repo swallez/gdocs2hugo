@@ -8,8 +8,10 @@ use std::fs;
 use serde::{Deserialize, Deserializer};
 use chrono::{TimeZone, Utc};
 use itertools::Itertools;
+use lazy_static::lazy_static;
+use regex::Regex;
 
-pub fn download(toc_url: &str, download_dir: &Path, all: bool) -> anyhow::Result<()> {
+pub fn download_toc(toc_url: &str, download_dir: &Path) -> anyhow::Result<Vec<DocData>> {
     fs::create_dir_all(download_dir).with_context(|| format!("Cannot create directory {:?}", download_dir))?;
 
     let csvtext = reqwest::blocking::get(toc_url)?
@@ -21,14 +23,17 @@ pub fn download(toc_url: &str, download_dir: &Path, all: bool) -> anyhow::Result
 
     let docs = DocData::read_csv(csvtext.as_bytes())?;
 
-    docs.par_iter()
-        .map(|doc| download_doc(&doc, download_dir, all))
-        .collect::<anyhow::Result<Vec<()>>>()?; // Report any error downloading docs
+    Ok(docs)
+}
 
+pub fn download_html_docs(docs: &Vec<DocData>, download_dir: &Path, all: bool) -> anyhow::Result<()> {
+    docs.par_iter()
+        .map(|doc| download_html_doc(&doc, download_dir, all))
+        .collect::<anyhow::Result<Vec<()>>>()?; // Report any error downloading docs
     Ok(())
 }
 
-fn download_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::Result<()> {
+fn download_html_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::Result<()> {
     if !doc.publish && !all {
         //println!("Skipping '{}' (not published)", doc.slug);
         return Ok(());
@@ -36,7 +41,7 @@ fn download_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::Result
 
     println!("Downloading doc for '{}'", doc.slug);
 
-    let content = reqwest::blocking::get(&format!("{}?embedded=true", &doc.gdoc_pub_url))
+    let content = reqwest::blocking::get(&format!("{}?embedded=true", &doc.gdoc_pub_url.as_ref().unwrap()))
         .with_context(|| format!("Failed to download {}", doc.slug))?
         .text()?;
 
@@ -48,6 +53,7 @@ fn download_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::Result
 
 #[derive(Debug, Deserialize)]
 pub struct DocData {
+    /// Target path. Has a leading '/' but no trailing '/'
     pub slug: String,
     pub author: Option<String>,
     pub category: Option<String>,
@@ -59,7 +65,7 @@ pub struct DocData {
     #[serde(deserialize_with = "deser_csv_date_option")]
     pub update_date: Option<DateTimeWithDefault>,
     /// "Publish to web" URL, used to get the HTML rendering of the doc.
-    pub gdoc_pub_url: String,
+    pub gdoc_pub_url: Option<String>,
     /// URL of the doc, used to translate links.
     pub gdoc_url: Option<String>,
     /// Relative path of the downloaded html
@@ -143,5 +149,36 @@ fn deser_csv_date_option<'de, D: Deserializer<'de>>(
             .datetime_from_str(&s, "%d/%m/%Y %H:%M:%S")
             .map_err(serde::de::Error::custom)?;
         Ok(Some(DateTimeWithDefault(t)))
+    }
+}
+
+
+lazy_static! {
+    static ref DOC_ID_RE: Regex =
+        Regex::new("^https://docs.google.com/document(/u/[0-9]+)?/d/([^/]+)/").unwrap();
+}
+
+/// Extracts the document id, if any, from a GDocs URL
+pub fn get_doc_id(url: &str) -> Option<&str> {
+    DOC_ID_RE.captures(url)
+        .and_then(|captures| captures.get(2))
+        .map(|m| m.as_str())
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_doc_id_extraction() {
+
+        assert_eq!(
+            Some("rUSGSdveGGDaGxuPmDyXus"),
+            super::get_doc_id("https://docs.google.com/document/d/rUSGSdveGGDaGxuPmDyXus/edit")
+        );
+
+        assert_eq!(
+            Some("rUSGSdveGGDaGxuPmDyXus"),
+            super::get_doc_id("https://docs.google.com/document/u/0/d/rUSGSdveGGDaGxuPmDyXus/edit")
+        );
     }
 }

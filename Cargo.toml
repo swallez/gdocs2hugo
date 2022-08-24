@@ -1,6 +1,6 @@
 [package]
 authors = ["Sylvain Wallez <sylvain@bluxte.net>"]
-edition = "2018"
+edition = "2021"
 name = "gdocs2hugo"
 version = "0.1.0"
 
@@ -13,7 +13,7 @@ itertools = "0.10.3"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
 regex = "1.6.0"
-structopt = "0.3.26"
+clap = { version="3.2.17", features = ["derive"] }
 rayon = "1.5.3"
 
 # Serde and formats
@@ -25,7 +25,10 @@ serde_json = "1.0"
 
 # HTML and CSS parsing
 html5ever = "0.26.0"
+xml5ever = "0.17.0"
+markup5ever = "0.11.0"
 cssparser = "0.29.6"
+string_cache = "0.8.4"
 
 scraper = "0.13.0"
 selectors = "*"
@@ -35,9 +38,16 @@ tendril = "*"
 
 # HTTP
 reqwest = {version = "0.11.11", features = ["blocking"] }
+hyper = "*"
+hyper-rustls = "*"
+tokio = "*"
 bytes = "*"
 mime_guess = "2.0.4"
 
 # Used for images
 image = "0.24.3"
 
+## Google docs
+google-docs1 = "3.1.0"
+google-drive3 = "4.0.1"
+google-sheets4 = "3.1.0"

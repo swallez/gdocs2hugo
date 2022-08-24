@@ -5,15 +5,17 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use lazy_static::lazy_static;
-use gdocs::DateTimeWithDefault;
+use gdocs_site::DateTimeWithDefault;
 
 pub mod config;
-mod css_rules;
-pub mod gdocs;
-mod html;
+pub mod gdocs_site;
 mod images;
-pub mod publish;
-mod hugo;
+mod hugo_site;
+pub mod gdoc_to_html;
+pub mod from_web_pub;
+mod experiments;
+mod publish;
+pub mod html;
 
 use regex::Regex;
 

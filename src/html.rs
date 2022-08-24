@@ -1,63 +1,160 @@
-use html5ever::serialize::{HtmlSerializer, Serialize};
-use html5ever::serialize::SerializeOpts;
-use html5ever::serialize::AttrRef;
-use html5ever::serialize::Serializer;
-use html5ever::serialize::TraversalScope;
-use html5ever::QualName;
 use std::io;
+use std::collections::HashMap;
+use std::io::Write;
 
-/// A DOM serializer that produces a stable output.
-///
-/// Element attributes are stored in a `HashMap`, that uses a random seed to distribute value in
-/// hash buckets, causing iteration order to also be random. This serializer first sorts attributes
-/// by their local name before serializing them, thus guaranteeing a stable serialization.
-///
-struct StableHtmlSerializer<S: Serializer>(S);
 
-impl<S: Serializer> Serializer for StableHtmlSerializer<S> {
-    fn start_elem<'a, AttrIter>(&mut self, name: QualName, attrs: AttrIter) -> io::Result<()>
-    where
-        AttrIter: Iterator<Item = AttrRef<'a>>,
-    {
-        let mut attrs_vec = attrs.collect::<Vec<_>>();
-        attrs_vec.sort_by(|(qname1, _), (qname2, _)| qname1.local.cmp(&qname2.local));
+pub trait HtmlConsumer {
+    fn start_document(&mut self) -> anyhow::Result<()>;
+    fn start_element(&mut self, name: &str, classes: Vec<&str>, style: HashMap<&str, &str>, attrs: HashMap<&str, &str>) -> anyhow::Result<()>;
+    fn text(&mut self, text: &str) -> anyhow::Result<()>;
+    fn end_element(&mut self, name: &str) -> anyhow::Result<()>;
+    fn end_document(&mut self) -> anyhow::Result<()>;
+}
 
-        self.0.start_elem(name, attrs_vec.into_iter())
+pub struct DevNull;
+
+impl HtmlConsumer for DevNull {
+    fn start_document(&mut self) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn end_elem(&mut self, name: QualName) -> io::Result<()> {
-        self.0.end_elem(name)
+    fn start_element(&mut self, name: &str, classes: Vec<&str>, style: HashMap<&str, &str>, attrs: HashMap<&str, &str>) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn write_text(&mut self, text: &str) -> io::Result<()> {
-        self.0.write_text(text)
+    fn text(&mut self, text: &str) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn write_comment(&mut self, text: &str) -> io::Result<()> {
-        self.0.write_comment(text)
+    fn end_element(&mut self, name: &str) -> anyhow::Result<()> {
+        Ok(())
     }
 
-    fn write_doctype(&mut self, name: &str) -> io::Result<()> {
-        self.0.write_doctype(name)
-    }
-
-    fn write_processing_instruction(&mut self, target: &str, data: &str) -> io::Result<()> {
-        self.0.write_processing_instruction(target, data)
+    fn end_document(&mut self) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 
-pub fn stable_html(doc: &scraper::Html) -> anyhow::Result<String> {
-    let opts = SerializeOpts {
-        scripting_enabled: false, // It's not clear what this does.
-        traversal_scope: TraversalScope::IncludeNode,
-        create_missing_parent: false,
-    };
+fn nl(writer: &mut impl Write) -> io::Result<()> {
+    writer.write_all(b"\n")
+}
 
-    let mut buf = Vec::new();
-    let mut ser = StableHtmlSerializer(HtmlSerializer::new(&mut buf, opts));
+// Borrowed from html5ever's HtmlSerializer
+fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io::Result<()> {
+    writer.write_all(b"&amp;")?;
+    for c in text.chars() {
+        match c {
+            '&' => writer.write_all(b"&amp;"),
+            '\u{00A0}' => writer.write_all(b"&nbsp;"),
+            '"' if attr_mode => writer.write_all(b"&quot;"),
+            '<' if !attr_mode => writer.write_all(b"&lt;"),
+            '>' if !attr_mode => writer.write_all(b"&gt;"),
+            c => writer.write_fmt(format_args!("{}", c)),
+        }?;
+    }
+    Ok(())
+}
 
-    let root = doc.root_element();
-    root.serialize( &mut ser, TraversalScope::IncludeNode)?;
+pub struct HtmlSerializer<'a, Wr: Write> {
+    writer: &'a mut Wr,
+}
 
-    Ok(String::from_utf8(buf).unwrap())
+impl <'a, Wr: Write> HtmlSerializer<'a, Wr> {
+    pub fn new(wr: &'a mut Wr) -> Self {
+        HtmlSerializer {
+            writer: wr,
+        }
+    }
+}
+
+fn is_block_tag(name: &str) -> bool {
+    match name {
+        "body"| "head"| "div" | "ul" | "table" | "td" | "p" | "li" | "hr" => true,
+        _ => false
+    }
+}
+
+fn is_empty_tag(name: &str) -> bool {
+    match name {
+        "img" | "br" | "hr" => true,
+        _ => false,
+    }
+}
+
+use itertools::Itertools;
+
+impl <Wr: Write> HtmlConsumer for HtmlSerializer<'_, Wr> {
+
+    fn start_document(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn start_element(&mut self, name: &str, classes: Vec<&str>, style: HashMap<&str, &str>, attrs: HashMap<&str, &str>) -> anyhow::Result<()> {
+        let is_block = is_block_tag(name);
+        if is_block {
+            nl(self.writer)?;
+        }
+
+        self.writer.write_fmt(format_args!("<{}", name))?;
+
+        if !classes.is_empty() {
+            write!(self.writer, " class=\"")?;
+            for cl in classes.into_iter().intersperse(" ") {
+                write_escaped(self.writer, cl, true)?;
+            }
+            write!(self.writer, "\"")?;
+        }
+
+        if !style.is_empty() {
+            write!(self.writer, " style=\"")?;
+            for (prop, value) in style.into_iter() {
+                write_escaped(self.writer, prop, true)?;
+                write!(self.writer, ":")?;
+                write_escaped(self.writer, value, true)?;
+                write!(self.writer, ";")?;
+            }
+            write!(self.writer, "\"")?;
+        }
+        self.writer.write_all(b">")?;
+
+        for (attr, value) in attrs.into_iter() {
+            write!(self.writer, " {}=\"", attr)?;
+            write_escaped(self.writer, value, true)?;
+            write!(self.writer, "\"")?;
+        }
+
+        if is_block || name == "br" {
+            nl(self.writer)?;
+        }
+        Ok(())
+    }
+
+    fn text(&mut self, text: &str) -> anyhow::Result<()> {
+        write_escaped(self.writer, text, false)?;
+
+        Ok(())
+    }
+
+    fn end_element(&mut self, name: &str) -> anyhow::Result<()> {
+        if is_empty_tag(name) {
+            return Ok(())
+        }
+
+        let is_block = is_block_tag(name);
+        if is_block {
+            nl(self.writer)?;
+        }
+
+        write!(self.writer, "</{}>", name)?;
+
+        if is_block {
+            nl(self.writer)?;
+        }
+
+        Ok(())
+    }
+
+    fn end_document(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
