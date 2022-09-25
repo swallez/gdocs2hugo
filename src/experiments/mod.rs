@@ -1,1 +1,1 @@
-mod gdocs_api;
+pub mod gdocs_api;

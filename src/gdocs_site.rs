@@ -1,5 +1,6 @@
 //! Representation of the Google Docs that constitute the website.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -53,6 +54,7 @@ fn download_html_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::R
 
 #[derive(Debug, Deserialize)]
 pub struct DocData {
+    pub title: String,
     /// Target path. Has a leading '/' but no trailing '/'
     pub slug: String,
     pub author: Option<String>,
@@ -60,9 +62,9 @@ pub struct DocData {
     pub weight: Option<i16>,
     #[serde(deserialize_with = "deser_uppercase_bool")]
     pub publish: bool,
-    #[serde(deserialize_with = "deser_csv_date")]
-    pub publish_date: DateTimeWithDefault,
-    #[serde(deserialize_with = "deser_csv_date_option")]
+    #[serde(deserialize_with = "deser_csv_date_option", default)]
+    pub publish_date: Option<DateTimeWithDefault>,
+    #[serde(deserialize_with = "deser_csv_date_option", default)]
     pub update_date: Option<DateTimeWithDefault>,
     /// "Publish to web" URL, used to get the HTML rendering of the doc.
     pub gdoc_pub_url: Option<String>,
@@ -71,6 +73,12 @@ pub struct DocData {
     /// Relative path of the downloaded html
     #[serde(skip, default)]
     pub download_path: PathBuf,
+    /// Arbitrary data that will be forwarded to the frontmatter
+    // #[serde(rename="type")]
+    // pub page_type: Option<String>,
+    // pub layout: Option<String>,
+    #[serde(flatten)]
+    pub other: BTreeMap<String, String>
 }
 
 impl DocData {
@@ -104,6 +112,9 @@ impl DocData {
                     doc.slug[1..].replace('/', "_")
                 };
                 doc.download_path = format!("{}.html", flat_slug).into();
+
+                // Remove empty "other" entries
+                doc.other.retain(|_, v| v.len() > 0);
 
                 // Done
                 doc
@@ -155,13 +166,13 @@ fn deser_csv_date_option<'de, D: Deserializer<'de>>(
 
 lazy_static! {
     static ref DOC_ID_RE: Regex =
-        Regex::new("^https://docs.google.com/document(/u/[0-9]+)?/d/([^/]+)/").unwrap();
+        Regex::new("^https://docs.google.com/(document|spreadsheets)(/u/[0-9]+)?/d/([^/]+)/").unwrap();
 }
 
 /// Extracts the document id, if any, from a GDocs URL
 pub fn get_doc_id(url: &str) -> Option<&str> {
     DOC_ID_RE.captures(url)
-        .and_then(|captures| captures.get(2))
+        .and_then(|captures| captures.get(3))
         .map(|m| m.as_str())
 }
 

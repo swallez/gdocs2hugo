@@ -3,13 +3,14 @@
 
 // Reference doc: https://developers.google.com/docs/api/reference/rest/v1/documents#Document
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::{Display, Formatter, Write as FmtWrite};
 use std::ops::AddAssign;
 use std::path::Path;
 use google_docs1::api as docs;
 use itertools::Itertools;
 use crate::html::HtmlConsumer;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 
 
 pub fn read(p: impl AsRef<Path>) -> anyhow::Result<docs::Document> {
@@ -23,9 +24,8 @@ pub fn read(p: impl AsRef<Path>) -> anyhow::Result<docs::Document> {
 
 #[derive(Debug)]
 pub struct ImageReference<'a> {
-    pub doc_id: &'a str,
-    pub image_id: &'a str,
-    pub url: &'a str,
+    pub id: &'a str,
+    pub src: &'a str,
 }
 
 pub struct ImageRewriter<'r, C: HtmlConsumer> {
@@ -53,9 +53,8 @@ impl <C: HtmlConsumer> HtmlConsumer for ImageRewriter<'_, C> {
             let id = attrs.get("id").ok_or(anyhow!("<img> tag with no 'id' attribute"))?;
 
             let img_ref = ImageReference {
-                doc_id: "",
-                image_id: id,
-                url: src
+                id: id,
+                src: src
             };
             let new_src: String = (self.resolver)(&img_ref);
             let mut new_attrs = attrs;
@@ -80,6 +79,83 @@ impl <C: HtmlConsumer> HtmlConsumer for ImageRewriter<'_, C> {
 }
 
 //-------------------------------------------------------------------------------------------------
+
+// See https://kramdown.gettalong.org/syntax.html#inline-attribute-lists
+
+#[derive(Default)]
+struct InlineAttributes {
+    id: Option<String>,
+    pub classes: Vec<String>,
+    attrs: BTreeMap<String, String>,
+}
+
+enum AttrTag {
+    Start(InlineAttributes),
+    End,
+}
+
+
+// use nom::character::complete::{ alphanumeric1, alpha1, space0, space1 };
+// use nom::combinator::{value, verify };
+// use nom::multi::{ many1 };
+// use nom::IResult;
+
+impl AttrTag {
+    pub fn parse_para<'a>(para: &'a google_docs1::api::Paragraph) -> anyhow::Result<Option<(AttrTag, &'a str)>> {
+        if let Some(ref elts) = para.elements {
+            if !(elts.is_empty()) {
+                if let Some(ref text) = elts[0].text_run {
+                    if let Some(ref content) = text.content {
+                        return AttrTag::parse(content);
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn parse<'a>(text: &'a str) -> anyhow::Result<Option<(AttrTag, &'a str)>> {
+        let mut text = text;
+        if !text.starts_with("{: ") {
+            if text.starts_with("{::}") {
+                return Ok(Some((AttrTag::End, &text[4..])));
+            }
+            return Ok(None);
+        }
+
+        text = &text[3..];
+
+        if let Some(end) = text.find("}") {
+            let mut attrs = InlineAttributes::default();
+            let parts = (&text[..end]).trim().split(' ');
+
+            attrs.classes = parts.map(String::from).collect();
+
+            return Ok(Some((AttrTag::Start(attrs), &text[end+1..])));
+
+        } else {
+            bail!("Missing closing '}}'");
+        }
+    }
+}
+
+impl Display for InlineAttributes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // FIXME escape values
+        if let Some(ref id) = self.id {
+            write!(f, " id='{}'", id)?;
+        }
+        if !self.classes.is_empty() {
+            write!(f, " class='{}'", self.classes.join(" "))?;
+        }
+        for (k, v) in &self.attrs {
+            write!(f, " {}='{}'", k, v)?;
+        }
+        Ok(())
+    }
+}
+
+//-------------------------------------------------------------------------------------------------
 // GDocs HTML renderer
 
 // We need <'r> because the closure is boxed to be stored in the HtmlRenderer struct and we want
@@ -88,22 +164,20 @@ impl <C: HtmlConsumer> HtmlConsumer for ImageRewriter<'_, C> {
 // Callbacks and lifetimes https://stackoverflow.com/questions/41081240/idiomatic-callbacks-in-rust
 
 
-pub fn render <C: HtmlConsumer>(
+pub fn render(
     doc: &docs::Document,
-    next: C,
-    ) -> String {
+    ) -> anyhow::Result<String> {
     let mut renderer = HtmlRenderer {
         doc,
         html: String::new(),
         tags: Vec::new(),
-        out: next,
     };
 
-    renderer.format_doc();
-    return renderer.html;
+    renderer.format_doc()?;
+    return Ok(renderer.html);
 }
 
-struct HtmlRenderer <'a, HC: HtmlConsumer> {
+struct HtmlRenderer <'a> {
     // Input
     doc: &'a docs::Document,
 
@@ -112,22 +186,21 @@ struct HtmlRenderer <'a, HC: HtmlConsumer> {
 
     // Output
     html: String,
-    out: HC,
 }
 
-impl <HC: HtmlConsumer> AddAssign<&str> for HtmlRenderer<'_, HC> {
+impl AddAssign<&str> for HtmlRenderer<'_> {
     fn add_assign(&mut self, rhs: &str) {
         self.add_html_text(rhs)
     }
 }
 
-impl <HC: HtmlConsumer> AddAssign<String> for HtmlRenderer<'_, HC> {
+impl AddAssign<String> for HtmlRenderer<'_> {
     fn add_assign(&mut self, rhs: String) {
         self.add_html_text(rhs.as_str());
     }
 }
 
-impl <HC: HtmlConsumer> AddAssign<&Option<String>> for HtmlRenderer<'_, HC> {
+impl AddAssign<&Option<String>> for HtmlRenderer<'_> {
     fn add_assign(&mut self, rhs: &Option<String>) {
         if let Some(rhs) = rhs {
             self.add_html_text(rhs);
@@ -135,7 +208,7 @@ impl <HC: HtmlConsumer> AddAssign<&Option<String>> for HtmlRenderer<'_, HC> {
     }
 }
 
-impl <HC: HtmlConsumer> AddAssign<&String> for HtmlRenderer<'_, HC> {
+impl AddAssign<&String> for HtmlRenderer<'_> {
     fn add_assign(&mut self, rhs: &String) {
         self.add_html_text(rhs.as_str());
     }
@@ -147,7 +220,7 @@ struct Indent {
     magnitude: f64,
 }
 
-impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
+impl <'a> HtmlRenderer<'a> {
     fn add_html_text(&mut self, text: &str) {
         self.html += text;
     }
@@ -187,6 +260,28 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         self.tags.push(tag);
         *self += "<";
         *self += tag;
+        if class.len() > 0 {
+            *self += " class='";
+            *self += class;
+            *self += "'";
+        }
+        if style.len() > 0 {
+            *self += " style='";
+            *self += style;
+            *self += "'";
+        }
+        *self += ">";
+    }
+
+    fn start_tag_id_class_style(&mut self, tag: &'a str, id: &str, class: &str, style: &str) {
+        self.tags.push(tag);
+        *self += "<";
+        *self += tag;
+        if id.len() > 0 {
+            *self += " id='";
+            *self += id;
+            *self += "'";
+        }
         if class.len() > 0 {
             *self += " class='";
             *self += class;
@@ -240,7 +335,7 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         url.as_ref().to_string()
     }
 
-    fn format_doc(&mut self) {
+    fn format_doc(&mut self) -> anyhow::Result<()> {
         self.start_tag("html");
         self.nl();
 
@@ -254,7 +349,7 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         self.end_tag_nl();
         self.start_tag("body");
 
-        self.format_body();
+        self.format_body()?;
         self.format_footnotes();
 
         // TODO
@@ -278,64 +373,129 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
 
         self.end_tag_nl();
         self.end_tag_nl();
+
+        Ok(())
     }
 
     /// The document body.
-    fn format_body(&mut self) {
+    fn format_body(&mut self) -> anyhow::Result<()> {
         if let Some(body) = &self.doc.body {
-            self.format_structural_elements(&body.content);
+            self.format_structural_elements(&body.content)?;
         }
+
+        Ok(())
     }
 
-    fn format_structural_elements(&mut self, elements: &'a Option<Vec<docs::StructuralElement>>) {
+    fn format_structural_elements(&mut self, elements: &'a Option<Vec<docs::StructuralElement>>) -> anyhow::Result<()> {
+        // TODO: identify inline attribute lists.
+        // See https://kramdown.gettalong.org/syntax.html#inline-attribute-lists
         let mut indent = Indent::default();
         if let Some(elements) = elements {
             for elt in elements {
-                self.format_structural_element(elt, &mut indent);
+                self.format_structural_element(elt, &mut indent)?;
             }
         }
         for _ in 0..indent.depth {
             self.end_tag_nl();
         }
+
+        Ok(())
     }
 
-    fn format_structural_element(&mut self, elt: &'a docs::StructuralElement, indent: &mut Indent) {
+    fn format_structural_element(&mut self, elt: &'a docs::StructuralElement, indent: &mut Indent) -> anyhow::Result<()>{
         if let Some(para) = &elt.paragraph {
-            self.format_paragraph(&para, indent);
+            self.format_paragraph(&para, indent)?;
 
         } else if let Some(table) = &elt.table {
-            self.format_table(&table);
+            self.format_table(&table)?;
 
         } else if let Some(section_break) = &elt.section_break {
             self.format_section_break(section_break);
 
         } else if let Some(toc) = &elt.table_of_contents {
-            self.format_table_of_contents(toc);
+            self.format_table_of_contents(toc)?;
 
         } else {
             unimplemented!("Unknown structural element type {:?}", elt);
         }
+
+        Ok(())
     }
 
-    fn format_table_of_contents(&mut self, toc: &'a docs::TableOfContents) {
+    fn format_table_of_contents(&mut self, toc: &'a docs::TableOfContents) -> anyhow::Result<()> {
         self.start_tag_class("div", "table-of-contents");
-        self.format_structural_elements(&toc.content);
+        self.format_structural_elements(&toc.content)?;
         self.end_tag_nl();
+        Ok(())
     }
 
-    fn format_section_break(&mut self, section: &docs::SectionBreak) {
+    fn format_section_break(&mut self, _section: &docs::SectionBreak) {
         // FIXME
         // Ignore for now
         // The interesting bits: column properties (multi-column sections)
         // Should create a <div> containing following sibling elements until the next section break
     }
 
+    fn get_shortcode(&mut self, para: &'a docs::Paragraph) -> Option<String> {
+        let mut text = String::new();
+
+        if let Some(ref elts) = para.elements {
+            for elt in elts {
+                if let Some(ref text_run) = elt.text_run {
+                    if let Some(ref content) = text_run.content {
+                        text += content;
+                    }
+                }
+            }
+        }
+
+        let trimmed = text.trim();
+
+        if (trimmed.starts_with("{{") && trimmed.ends_with("}}")) ||
+            (trimmed.starts_with("{:") && trimmed.ends_with(":}")) {
+            Some(text)
+        } else {
+            None
+        }
+    }
+
+    fn write_shortcode(txt: &str, out: &mut impl std::fmt::Write) -> anyhow::Result<()> {
+        // GDocs likes fancy quotes...
+        let txt = txt.replace('”', "\"").replace('’', "'");
+
+        for mut code in txt.split("{{") {
+            if code.len() == 0 {
+                // Beginning of first shortcode
+                continue;
+            }
+            // Remove ending delimiters and any remaining whitespace
+            // and also allow either '{{' or '{{<' notation.
+            code = code.trim_start_matches("<");
+            code = code.trim_end();
+            code = code.trim_end_matches("}}");
+            code = code.trim_end_matches(">");
+            code = code.trim();
+
+            // Find command
+            let (cmd, args) = code.split_once(' ').unwrap_or_else(|| (code, ""));
+
+            if cmd == "html" {
+                out.write_str(args)?;
+            } else {
+                // Write it as a comment, the serializer will then write it verbatim
+                write!(out, "<!--{{{{< {} >}}}}-->", code)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// A paragraph is a range of content that is terminated with a newline character.
-    fn format_paragraph(&mut self, para: &'a docs::Paragraph, indent: &mut Indent) {
+    fn format_paragraph(&mut self, para: &'a docs::Paragraph, indent: &mut Indent) -> anyhow::Result<()> {
 
         // Find this paragraph's nesting level and add/close <ul>s accordingly
         let cur_depth = indent.depth;
-        let mut new_depth = cur_depth;
+        let mut new_depth;
 
         let cur_magnitude = indent.magnitude;
         let mut new_magnitude: f64 = 0.0;
@@ -374,6 +534,33 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         indent.depth = new_depth;
         indent.magnitude = new_magnitude;
 
+        if let Some(short_code) = self.get_shortcode(para) {
+            if let Some(tag) = AttrTag::parse_para(para)? {
+                // gdoc2hugo shortcode
+                let attrs = tag.0;
+                self.nl();
+                match attrs {
+                    AttrTag::Start(attrs) => {
+                        *self += "<div";
+                        *self += attrs.to_string();
+                        *self += ">";
+                    },
+                    AttrTag::End => {
+                        self.nl();
+                        *self += "</div>";
+                    }
+                };
+                self.nl();
+
+                return Ok(());
+            } else {
+                self.nl();
+                Self::write_shortcode(&short_code, &mut self.html)?;
+                self.nl();
+                return Ok(());
+            }
+        }
+
         // Ignored:
         // - para.suggested_paragraph_style_changes
         // - para.suggested_bullet_changes
@@ -381,6 +568,7 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
 
         let mut tag = "p";
         let mut class: &'a str = "";
+        let mut id = "";
 
         // para.positioned_object_ids
         let mut style_attr = String::new();
@@ -397,24 +585,26 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
                 }
             }
             if let Some(align) = &style.alignment {
-                style_attr += "text-align:";
                 style_attr += match align.as_str() {
-                    "START" => "start",
-                    "END" => "end",
-                    "CENTER" => "center",
-                    "JUSTIFIED" => "justify",
-                    _ => "inherit", // "UNSPECIFIED" or other value
+                    "START" => "text-align:start;",
+                    "END" => "text-align:end;",
+                    "CENTER" => "text-align:center;",
+                    //"JUSTIFIED" => "text-align:justify;",
+                    _ => "", // "UNSPECIFIED" or other value
                 };
-                style_attr += ";";
+            }
+
+            if let Some(ref heading) = style.heading_id {
+                id = heading;
             }
         }
 
-        if let Some(bullet) = &para.bullet {
+        if let Some(_bullet) = &para.bullet {
             tag = "li";
         }
 
         self.nl();
-        self.start_tag_class_style(tag, class, style_attr.as_str());
+        self.start_tag_id_class_style(tag, id, class, style_attr.as_str());
 
         if let Some(elements) = &para.elements {
             for elt in elements {
@@ -423,6 +613,8 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         }
 
         self.end_tag_nl();
+
+        Ok(())
     }
 
     fn format_paragraph_element(&mut self, elt: &docs::ParagraphElement) {
@@ -444,9 +636,9 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
             // Apply to an entire section
             unimplemented!("Column break");
 
-        } else if let Some(footnote_ref) = &elt.footnote_reference {
+        } else if let Some(_footnote_ref) = &elt.footnote_reference {
 
-        } else if let Some(hr) = &elt.horizontal_rule {
+        } else if let Some(_hr) = &elt.horizontal_rule {
             *self += "<hr>\n";
 
         } else if let Some(_equation) = &elt.equation {
@@ -467,14 +659,14 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         } else if let Some(person) = &elt.person {
             *self += &person.person_properties.as_ref().unwrap().name;
 
-        } else if let Some(link) = &elt.rich_link {
+        } else if let Some(_link) = &elt.rich_link {
             // TODO
         } else {
             unimplemented!("Unknown paragraph element {:?}", elt);
         }
     }
 
-    fn format_embedded_object(&mut self, id: &str, obj: &docs::EmbeddedObject) {
+    fn format_embedded_object(&mut self, mut id: &str, obj: &docs::EmbeddedObject) {
         // Can be either an embedded drawing or an image
         if let Some(img) = &obj.image_properties {
 
@@ -513,8 +705,16 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
 
             self.start_tag_style("span", &span_style);
 
-            *self += "<img src='";
-            // add id attribute
+            // Image ids are "kix.<id>" where <id> seems to be 12 base-36 chars
+            if id.starts_with("kix.") {
+                id = &id["kix.".len()..];
+            }
+
+            *self += "<img id='";
+            *self += id;
+            *self += "' style='";
+            *self += img_style;
+            *self += "' src='";
             *self += img.content_uri.as_ref().unwrap();
             // let new_uri = &(self.image_resolver)(&ImageReference {
             //     doc_id: self.doc.document_id.as_ref().unwrap(),
@@ -522,8 +722,6 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
             //     url: img.content_uri.as_ref().unwrap(),
             // });
             // *self += new_uri;
-            *self += "' style='";
-            *self += img_style;
             *self += "'>";
 
             self.end_tag();
@@ -535,15 +733,23 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         let mut style_attr = String::new();
         let mut elts = Vec::<&str>::new();
 
-        let mut link: Option<&String> = None;
+        let mut link: Option<String> = None;
 
         if let Some(style) = &text.text_style {
             if let Some(style_link) = &style.link {
-                link = style_link.url.as_ref();
+                link = style_link.url.clone();
                 // NOTE: Links have foreground-color and underline styles. We'll skip them
                 // below to avoid interfering with the CSS style.
                 // We may want to keep these however if they're the same as the ones of the
                 // previous/next text runs (link in a styled paragraph)
+
+                if let Some(ref heading) = style_link.heading_id {
+                    link = Some(format!("#{}", heading));
+                }
+
+                if let Some(ref bkm) = style_link.bookmark_id {
+                    link = Some(format!("#{}", bkm));
+                }
             }
 
             if style.bold.unwrap_or(false) {
@@ -585,9 +791,13 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         }
 
         // Start <a>
-        if let Some(url) = link {
+        if let Some(ref url) = link {
             *self += "<a href='";
-            *self +=  self.convert_url(url);
+            if url.starts_with('#') {
+                *self += url;
+            } else {
+                *self +=  self.convert_url(url);
+            }
             *self += "'>";
         }
 
@@ -624,8 +834,11 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
         }
     }
 
-    fn format_table(&mut self, table: &'a docs::Table) {
-        *self += "<table border>\n";
+    fn format_table(&mut self, table: &'a docs::Table) -> anyhow::Result<()> {
+        *self += "<table>\n";
+
+        // TODO: check if first line style is different from others, and then make it a <thead>
+        *self += "<tbody>\n";
 
         // Merged table cells (colspan or rowspan > 1) are still present as empty cells that must
         // be ignored. This vector has the width of the table and for each column contains the
@@ -671,7 +884,7 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
                         *self += ">\n";
 
                         // Cell content
-                        self.format_structural_elements(&cell.content);
+                        self.format_structural_elements(&cell.content)?;
 
                         *self += "</td>\n";
                     }
@@ -680,7 +893,10 @@ impl <'a, HC: HtmlConsumer> HtmlRenderer<'a, HC> {
                 *self += "</tr>\n";
             }
         }
+        *self += "</tbody>\n";
         *self += "</table>\n";
+
+        Ok(())
     }
 
     fn format_footnotes(&mut self) {
@@ -709,11 +925,12 @@ fn add_color(name: &str, style_attr: &mut String, color: &Option<docs::OptionalC
             if let Some(color) = &color.rgb_color {
                 // End of russian puppets...
                 let style = format!(
-                    "{}:rgb({},{},{});",
+                    "{}:rgb({:.0}%,{:.0}%,{:.0}%);",
                     name,
-                    color.red.unwrap(),
-                    color.green.unwrap(),
-                    color.blue.unwrap()
+                    // Some or all colors are sometimes null.
+                    color.red.unwrap_or(0.0)*100.0,
+                    color.green.unwrap_or(0.0)*100.0,
+                    color.blue.unwrap_or(0.0)*100.0
                 );
                 *style_attr += &style;
             }
@@ -728,4 +945,44 @@ fn dimension_to_px(dimension: &docs::Dimension) -> f64 {
         return *magnitude / 0.75;
     }
     panic!("Unknown unit {}", unit);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_attr() -> anyhow::Result<()> {
+        let x = AttrTag::parse("{: x y z }blah")?;
+
+        match x {
+            Some((AttrTag::Start(attrs), s)) => {
+                assert_eq!(attrs.to_string(), " class='x y z'");
+                assert_eq!(s, "blah");
+                return Ok(())
+            },
+            _ => return Err(anyhow!("expecting a start tag")),
+        }
+    }
+
+    #[test]
+    fn test_write_short_code() -> anyhow::Result<()> {
+        let mut out = String::new();
+        HtmlRenderer::write_shortcode("{{ html <div class='bar'> }}", &mut out).expect("write");
+        assert_eq!("<div class='bar'>", out);
+
+        let mut out = String::new();
+        HtmlRenderer::write_shortcode("{{ html <div class=”row”> }}", &mut out).expect("write");
+        assert_eq!("<div class=\"row\">", out);
+
+        let mut out = String::new();
+        HtmlRenderer::write_shortcode(r#"{{ youtube id="xyz" }}"#, &mut out).expect("write");
+        assert_eq!(r#"<!--{{< youtube id="xyz" >}}-->"#, out);
+
+        let mut out = String::new();
+        HtmlRenderer::write_shortcode("{{ html <div class='bar'> }} \u{0B} {{ youtube id='xyz' }}", &mut out).expect("write");
+        assert_eq!(r#"<div class='bar'><!--{{< youtube id='xyz' >}}-->"#, out);
+
+        Ok(())
+    }
 }

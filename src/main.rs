@@ -21,12 +21,12 @@ fn main0(args: RootCommand, config: Config) -> anyhow::Result<()> {
     match args.command {
         Download { all } => {
             let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
-            gdocs_site::download_html_docs(&docs, &config.download_dir, all);
+            gdocs_site::download_html_docs(&docs, &config.download_dir, all)?;
         }
         Publish { download, all } => {
             if download {
                 let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
-                gdocs_site::download_html_docs(&docs, &config.download_dir, all);
+                gdocs_site::download_html_docs(&docs, &config.download_dir, all)?;
             }
             from_web_pub::publish::publish(&config.download_dir, &config.hugo_site_dir, config.default_author, all)?;
         }
@@ -36,17 +36,17 @@ fn main0(args: RootCommand, config: Config) -> anyhow::Result<()> {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            rt.block_on(gdocs_api::download())?;
+            rt.block_on(experiments::gdocs_api::_download())?;
         }
 
         Download2 { all } => {
             // FIXME: download ToC using the gdrive API instead of using the public export
-            let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
-            gdocs_site::download_json_docs(&docs, &config.download_dir, &config.hugo_site_dir, all);
+            // let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
+            // gdocs_site::download_json_docs(&docs, &config.download_dir, &config.hugo_site_dir, all);
         },
 
-        Publish2 { download, all } => {
-
+        Publish2 { store, all } => {
+            publish::publish(&config, store, all)?;
         }
     }
 

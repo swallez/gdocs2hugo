@@ -12,8 +12,8 @@ pub fn import_image2(
 
     let hugo_dir = hugo_dir.as_ref();
 
-    let url = img_ref.url;
-    if !img_ref.url.contains("googleusercontent.com") {
+    let url = img_ref.src;
+    if !img_ref.src.contains("googleusercontent.com") {
         println!("{} - Found a regular image link (!?): {}", slug, url);
         return Ok(url.to_string());
     }
@@ -31,20 +31,20 @@ pub fn import_image2(
                 .file_name().unwrap()
                 .to_string_lossy();
 
-            if file_name.starts_with(img_ref.image_id) {
+            if file_name.starts_with(img_ref.id) {
                 return Ok(format!("/post-images{}/{}", slug, file_name))
             }
         }
     }
 
-    let base_path = dir_path.join(img_ref.image_id);
+    let base_path = dir_path.join(img_ref.id);
     let extension = download_and_store(url, base_path, |_bytes, _ext| {
         if let Some(_store_dir) = store_dir {
             // TODO: store raw image
         }
     })?;
 
-    Ok(format!("/post-images{}/{}.{}", slug, img_ref.image_id, extension))
+    Ok(format!("/post-images{}/{}.{}", slug, img_ref.id, extension))
 
 }
 
@@ -119,13 +119,15 @@ pub fn import_image(url: &str, hugo_dir: &Path) -> anyhow::Result<String> {
 ///
 /// Images are stored in `dir`. Large PNGs are compressed to JPG, and `handle_raw` is called
 /// with the original image and extension, e.g. to keep it somewhere.
-fn download_and_store(
+/// 
+pub fn download_and_store(
         url: &str,
         base_path: impl AsRef<Path>,
         handle_raw: impl FnOnce(&bytes::Bytes, &str)
     ) -> Result<&'static str> {
     let base_path = base_path.as_ref();
 
+    //FIXME: only download if there's no file starting with `base_path`
     let resp = reqwest::blocking::get(url)?;
 
     let mut extension = {

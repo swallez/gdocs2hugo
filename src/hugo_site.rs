@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::DateTimeWithDefault;
 
 #[derive(Debug, Serialize, Default)]
@@ -5,7 +6,7 @@ pub struct FrontMatter {
     pub markup: &'static str,
     pub author: Option<String>,
     pub title: String,
-    pub date: DateTimeWithDefault,
+    pub date: Option<DateTimeWithDefault>,
     pub lastmod: Option<DateTimeWithDefault>,
     pub banner: Option<String>,
     pub slug: String,
@@ -16,5 +17,7 @@ pub struct FrontMatter {
     pub summary: Option<String>,
     pub inline_style: Option<String>,
     // not used in the publication process, but useful to distinguish generated pages
-    pub gdoc_pub_url: String,
+    pub gdoc_url: Option<String>,
+    #[serde(flatten)]
+    pub other: BTreeMap<String, String>
 }

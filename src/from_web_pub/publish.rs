@@ -22,7 +22,6 @@ use std::path::Path;
 use rayon::prelude::*;
 
 use crate::images;
-use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
@@ -36,19 +35,7 @@ pub fn publish(download_dir: &Path, hugo_dir: &Path, default_author: Option<Stri
 
     let records = DocData::read_csv(&toc_file).with_context(|| format!("Failed to parse ToC file {:?}", &toc_path))?;
 
-    let mut url_to_slug = HashMap::<String, String>::new();
-    for record in &records {
-        if let Some(url) = record.gdoc_pub_url.as_ref() {
-            url_to_slug.insert(url.clone(), record.slug.clone());
-        }
-        if let Some(url) = record.gdoc_url.as_ref() {
-            url_to_slug.insert(url.clone(), record.slug.clone());
-        }
-    }
-
-    let site_data = SiteData {
-        url_to_slug
-    };
+    let site_data = SiteData::new(&records)?;
 
     records
         .into_par_iter()
@@ -106,9 +93,10 @@ pub fn publish_doc(
         author: record.author,
         slug: flat_slug,
         url: Some(record.slug),
-        gdoc_pub_url: record.gdoc_pub_url.unwrap(),
+        gdoc_url: record.gdoc_pub_url,
         weight: record.weight,
         categories,
+        other: record.other,
         ..FrontMatter::default()
     };
 
@@ -296,38 +284,7 @@ fn cleanup_subtitle_class(doc: &mut scraper::Html) {
 /// `<h1>` - extract title, summary and remove tag
 ///
 fn cleanup_h1_and_get_meta(doc: &mut scraper::Html, fm: &mut FrontMatter) {
-    let h1_selector = scraper::Selector::parse("h1").unwrap();
-    let img_selector = scraper::Selector::parse("img").unwrap();
-    let mut ids = Vec::new();
-
-    if let Some(h1) = doc.select(&h1_selector).next() {
-        let txt = h1.text().collect::<Vec<_>>().join(" ");
-        ids.push(h1.id());
-        fm.title = txt;
-
-        // Summary is all the text preceding <h1>
-        let mut summary = String::new();
-        for sibling in h1.prev_siblings().collect::<Vec<_>>().into_iter().rev() { // prev_siblings iterates in reverse order
-            if let Some(elt) = scraper::ElementRef::wrap(sibling) {
-                summary.push_str(&elt.text().collect::<Vec<_>>().join(" "));
-                summary.push_str(" ");
-
-                // Img above <h1> becomes the article banner
-                if let Some(img) = elt.select(&img_selector).next() {
-                    let src = QualName::new(None, ns!(), local_name!("src"));
-                    fm.banner = img.value().attrs.get(&src).map(|s| s.to_string());
-                }
-            }
-            ids.push(sibling.id());
-        }
-        if !summary.is_empty() {
-            fm.summary = Some(summary);
-        }
-    }
-
-    for id in ids {
-        doc.tree.get_mut(id).unwrap().detach();
-    }
+    crate::tweaks::extract_title_and_summary(doc, fm).unwrap();
 }
 
 /// Remove the class attribute from the child <span> of header tags
@@ -365,25 +322,8 @@ fn rewrite_and_cleanup_a_elts(doc: &mut scraper::Html, _fm: &mut FrontMatter, si
             let qualname = QualName::new(None, ns!(), local_name!("href"));
 
             if let Some(href) = elt.attrs.get_mut(&qualname) {
-                if href.starts_with("https://www.google.com/url?") {
-                    let url = reqwest::Url::parse(href).unwrap();
-                    if let Some((_, v)) = url.query_pairs().find(|(k, _)| k == "q") {
-                        *href = v.trim().into();
-                    }
-                }
-
-                if href.starts_with("https://docs.google.com/document/") {
-                    let (url, frag) = href.split_once('#').unwrap_or_else(|| (href, ""));
-                    let translated_url = site_data.translate_url(url)?;
-
-                    if frag.is_empty() {
-                        *href = translated_url.into();
-                    } else {
-                        let frag = frag.to_string();
-                        *href = translated_url.into();
-                        href.push_char('#');
-                        href.push_slice(&frag);
-                    }
+                if let Some(new_href) = site_data.rewrite_href(href)? {
+                    *href = new_href.into();
                 }
             }
         }

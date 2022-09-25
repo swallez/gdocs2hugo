@@ -18,15 +18,15 @@ impl HtmlConsumer for DevNull {
         Ok(())
     }
 
-    fn start_element(&mut self, name: &str, classes: Vec<&str>, style: HashMap<&str, &str>, attrs: HashMap<&str, &str>) -> anyhow::Result<()> {
+    fn start_element(&mut self, _name: &str, _classes: Vec<&str>, _style: HashMap<&str, &str>, _attrs: HashMap<&str, &str>) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn text(&mut self, text: &str) -> anyhow::Result<()> {
+    fn text(&mut self, _text: &str) -> anyhow::Result<()> {
         Ok(())
     }
 
-    fn end_element(&mut self, name: &str) -> anyhow::Result<()> {
+    fn end_element(&mut self, _name: &str) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -40,7 +40,7 @@ fn nl(writer: &mut impl Write) -> io::Result<()> {
 }
 
 // Borrowed from html5ever's HtmlSerializer
-fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io::Result<()> {
+pub fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io::Result<()> {
     writer.write_all(b"&amp;")?;
     for c in text.chars() {
         match c {
