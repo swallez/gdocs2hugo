@@ -1,4 +1,6 @@
+use std::borrow::BorrowMut;
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Debug;
 use std::hash::Hasher;
 use crate::hugo_site::FrontMatter;
 use scraper::Selector;
@@ -8,6 +10,7 @@ use anyhow::Result;
 use anyhow::bail;
 use itertools::Itertools;
 use rayon::prelude::*;
+use tendril::StrTendril;
 use crate::gdoc_to_html::ImageReference;
 use crate::SiteData;
 
@@ -96,6 +99,7 @@ pub fn extract_title_and_summary(doc: &mut scraper::Html, fm: &mut FrontMatter) 
             ids.push(sibling.id());
         }
         if !summary.is_empty() {
+            fm.description = Some(summary.clone());
             fm.summary = Some(summary);
         }
     }
@@ -112,16 +116,23 @@ pub fn extract_title_and_summary(doc: &mut scraper::Html, fm: &mut FrontMatter) 
 /// The `resolver` takes an image reference (id & src) and returns the new value for the `src` attribute.
 ///
 pub fn import_img_elts(doc: &mut scraper::Html, resolver: impl Fn(&ImageReference) -> Result<String> + Send + Sync) -> Result<()> {
-    let selector = scraper::Selector::parse("img").unwrap();
+    let selector = Selector::parse("img").unwrap();
 
     // Collect all <img> ids and src attributes
     let ids_and_src = doc
         .select(&selector)
         .map(|elt| {
             let src = elt.value().attrs.get(&qname!("src")).unwrap().to_string();
-            let img_id = elt.value().attrs.get(&qname!("id")).unwrap().to_string();
-            (elt.id(), img_id, src)
+            if src.starts_with("/") {
+                // local path to a static asset added with the {{ html }} shortcode.
+                // Do not download and resize
+                None
+            } else {
+                let img_id = elt.value().attrs.get(&qname!("id")).unwrap().to_string();
+                Some((elt.id(), img_id, src))
+            }
         })
+        .flatten()
         .collect::<Vec<_>>();
 
     // Parallel import all images and rewrite src
@@ -143,6 +154,84 @@ pub fn import_img_elts(doc: &mut scraper::Html, resolver: impl Fn(&ImageReferenc
         if let scraper::Node::Element(elt) = node.value() {
             elt.attrs.insert(qname!("src"), src.into());
         }
+    }
+
+    Ok(())
+}
+
+pub fn move_bootstrap_btn_classes(doc: &mut scraper::Html) -> Result<()> {
+
+    // FIXME: scraper's DOM (ego-tree) is a major PITA to mutate several node values
+    // (e.g. move attributes around) without modifying the tree structure. Need to explore alternatives.
+
+    use scraper::Node::Element;
+
+    let selector = Selector::parse(".btn > p > a").unwrap();
+
+    let id_tuples = doc.select(&selector)
+        .map(|elt| {
+            (
+                elt.parent().unwrap().parent().unwrap().id(),
+                elt.parent().unwrap().id(),
+                elt.id())
+        })
+        .collect::<Vec<_>>();
+
+    for (div_id, p_id, a_id) in id_tuples {
+
+        // Extract and remove "btn*" classes from the div node.
+        let mut btn_classes = StrTendril::new();
+
+        {
+            let mut div_node = doc.tree.get_mut(div_id).unwrap();
+            if let Element(div_elt) = div_node.value() {
+                let new_div_class = div_elt.attrs.get_mut(&qname!("class")).unwrap()
+                    .split_whitespace()
+                    .map(|class| {
+                        if class.starts_with("btn") {
+                            btn_classes.push_slice(" ");
+                            btn_classes.push_slice(class);
+                            None
+                        } else {
+                            Some(class)
+                        }
+                    })
+                    .flatten()
+                    .join(" ");
+
+                div_elt.attrs.insert(qname!("class"), new_div_class.into());
+            }
+        }
+
+        // Add the btn classes to the anchor node.
+        {
+            let mut a_node = doc.tree.get_mut(a_id).unwrap();
+            if let Element(a_elt) = a_node.value() {
+                a_elt.attrs.insert(qname!("class"), btn_classes);
+            }
+        }
+
+        // Move p's style attribute to its parent div
+        let mut p_style = None::<StrTendril>;
+
+        {
+            let p_node = doc.tree.get(p_id).unwrap();
+            let p_elt = p_node.value().as_element().unwrap();
+            if let Some(style) = p_elt.attrs.get(&qname!("style")) {
+                p_style = Some(style.clone());
+            }
+        }
+
+        if let Some(style) = p_style {
+            let mut div_node = doc.tree.get_mut(div_id).unwrap();
+            if let Element(div_elt) = div_node.value() {
+                div_elt.attrs.insert(qname!("style"), style);
+            }
+        }
+
+        // Restructure the tree: remove the p elt and reparent its children.
+        doc.tree.get_mut(div_id).unwrap().reparent_from_id_append(p_id);
+        doc.tree.get_mut(p_id).unwrap().detach();
     }
 
     Ok(())

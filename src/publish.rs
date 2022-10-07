@@ -221,6 +221,8 @@ pub fn tweak_dom(_doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, s
     // Must be done last, after image and link URL rewriting
     tweaks::extract_title_and_summary(dom, fm)?;
 
+    tweaks::move_bootstrap_btn_classes(dom)?;
+
     Ok(())
 }
 
