@@ -3,6 +3,7 @@ use config::*;
 use gdocs2hugo::*;
 
 fn main() -> anyhow::Result<()> {
+    unsafe { backtrace_on_stack_overflow::enable() };
     let args = RootCommand::read();
     let config = Config::read(&args.config)?;
 
@@ -24,11 +25,11 @@ fn main0(args: RootCommand, config: Config) -> anyhow::Result<()> {
             gdocs_site::download_html_docs(&docs, &config.download_dir, all)?;
         }
         Publish { download, all } => {
-            if download {
-                let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
-                gdocs_site::download_html_docs(&docs, &config.download_dir, all)?;
-            }
-            from_web_pub::publish::publish(&config.download_dir, &config.hugo_site_dir, config.default_author, all)?;
+            // if download {
+            //     let docs = gdocs_site::download_toc(&config.toc_spreadsheet_url, &config.download_dir)?;
+            //     gdocs_site::download_html_docs(&docs, &config.download_dir, all)?;
+            // }
+            // from_web_pub::publish::publish(&config.download_dir, &config.hugo_site_dir, config.default_author, all)?;
         }
 
         // Test

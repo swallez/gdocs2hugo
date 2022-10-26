@@ -81,6 +81,11 @@ impl SiteData {
             }
         }
 
+        // Legacy link
+        if let Some(slug) = self.url_to_slug.get(url) {
+            return Ok(Some(format!("{}/", slug)));
+        }
+
         // Reference to GDocs (internal site links)
         if url.starts_with("https://docs.google.com/document/") {
             return if let Some(id) = gdocs_site::get_doc_id(url) {

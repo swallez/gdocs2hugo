@@ -15,6 +15,7 @@ maplit = "1.0.2"
 regex = "1.6.0"
 clap = { version="3.2.17", features = ["derive"] }
 rayon = "1.5.3"
+backtrace-on-stack-overflow = "0.2.0"
 
 # Serde and formats
 serde = {version = "1.0.142" }

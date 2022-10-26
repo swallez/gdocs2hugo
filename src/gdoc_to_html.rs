@@ -171,6 +171,7 @@ pub fn render(
         doc,
         html: String::new(),
         tags: Vec::new(),
+        last_is_nl: false,
     };
 
     renderer.format_doc()?;
@@ -186,6 +187,8 @@ struct HtmlRenderer <'a> {
 
     // Output
     html: String,
+
+    last_is_nl: bool,
 }
 
 impl AddAssign<&str> for HtmlRenderer<'_> {
@@ -221,78 +224,25 @@ struct Indent {
 }
 
 impl <'a> HtmlRenderer<'a> {
-    fn add_html_text(&mut self, text: &str) {
-        self.html += text;
-    }
 
-    fn start_tag(&mut self, tag: &'a str) {
-        self.tags.push(tag);
-        *self += "<";
-        *self += tag;
-        *self += ">";
-    }
+    fn start_tag(&mut self, tag: &'a str, attrs: &[(&str, &str)]) {
+        let mut write_it = || -> std::fmt::Result {
+            self.html.write_str("<")?;
+            self.html.write_str(tag)?;
+            for attr in attrs {
+                if !attr.1.is_empty() {
+                    write!(self.html, " {}=\"", attr.0)?;
+                    crate::html::write_escaped_fmt(&mut self.html, attr.1, true)?;
+                    self.html.write_char('"')?;
+                }
+            }
+            self.html.write_char('>')?;
+            self.tags.push(tag);
+            Ok(())
+        };
 
-    fn start_tag_class(&mut self, tag: &'a str, class: &str) {
-        self.tags.push(tag);
-        *self += "<";
-        *self += tag;
-        if class.len() > 0 {
-            *self += " class='";
-            *self += class;
-            *self += "'";
-        }
-        *self += ">";
-    }
-
-    fn start_tag_style(&mut self, tag: &'a str, style: &str) {
-        self.tags.push(tag);
-        *self += "<";
-        *self += tag;
-        if style.len() > 0 {
-            *self += " style='";
-            *self += style;
-            *self += "'";
-        }
-        *self += ">";
-    }
-
-    fn start_tag_class_style(&mut self, tag: &'a str, class: &str, style: &str) {
-        self.tags.push(tag);
-        *self += "<";
-        *self += tag;
-        if class.len() > 0 {
-            *self += " class='";
-            *self += class;
-            *self += "'";
-        }
-        if style.len() > 0 {
-            *self += " style='";
-            *self += style;
-            *self += "'";
-        }
-        *self += ">";
-    }
-
-    fn start_tag_id_class_style(&mut self, tag: &'a str, id: &str, class: &str, style: &str) {
-        self.tags.push(tag);
-        *self += "<";
-        *self += tag;
-        if id.len() > 0 {
-            *self += " id='";
-            *self += id;
-            *self += "'";
-        }
-        if class.len() > 0 {
-            *self += " class='";
-            *self += class;
-            *self += "'";
-        }
-        if style.len() > 0 {
-            *self += " style='";
-            *self += style;
-            *self += "'";
-        }
-        *self += ">";
+        // We write to a string, this should never fail (unless we OOM)
+        write_it().expect("Problem opening tag?");
     }
 
     fn end_tag(&mut self) {
@@ -300,6 +250,14 @@ impl <'a> HtmlRenderer<'a> {
         *self += "</";
         *self += tag;
         *self += ">";
+    }
+
+    fn add_html_text(&mut self, text: &str) {
+        self.html.push_str(text);
+//        crate::html::write_escaped_fmt(&mut self.html, text, false)?;
+        if !text.is_empty() {
+            self.last_is_nl = text.chars().last() == Some('\n');
+        }
     }
 
     fn end_tag_nl(&mut self) {
@@ -315,16 +273,19 @@ impl <'a> HtmlRenderer<'a> {
 
     fn content(&mut self, text: &str) {
         let mut text = text;
+        // Note: we never append text that ends with an \nl
         if text.ends_with('\n') {
             text = &text[.. text.len() - 1]
         }
 
         let mut split = text.split('\u{000B}');
         if let Some(first) = split.next() {
-            *self += first;
+            crate::html::write_escaped_fmt(&mut self.html, first, false).unwrap();
+            //self.add_html_text(first);
             for next in split {
                 *self += "<br>\n";
-                *self += next;
+                crate::html::write_escaped_fmt(&mut self.html, next, false).unwrap();
+                //self.add_html_text(next);
             }
         }
     }
@@ -336,18 +297,18 @@ impl <'a> HtmlRenderer<'a> {
     }
 
     fn format_doc(&mut self) -> anyhow::Result<()> {
-        self.start_tag("html");
+        self.start_tag("html", &[]);
         self.nl();
 
-        self.start_tag("head");
+        self.start_tag("head", &[]);
         self.nl();
         if let Some(title) = &self.doc.title {
-            self.start_tag("title");
+            self.start_tag("title", &[]);
             *self += title;
             self.end_tag_nl();
         }
         self.end_tag_nl();
-        self.start_tag("body");
+        self.start_tag("body", &[]);
 
         self.format_body()?;
         self.format_footnotes();
@@ -423,7 +384,7 @@ impl <'a> HtmlRenderer<'a> {
     }
 
     fn format_table_of_contents(&mut self, toc: &'a docs::TableOfContents) -> anyhow::Result<()> {
-        self.start_tag_class("div", "table-of-contents");
+        self.start_tag("div", &[("class", "table-of-contents")]);
         self.format_structural_elements(&toc.content)?;
         self.end_tag_nl();
         Ok(())
@@ -522,7 +483,7 @@ impl <'a> HtmlRenderer<'a> {
         for _ in cur_depth..new_depth {
             // FIXME: distinguish ul/ol and list-style-type
             self.nl();
-            self.start_tag("ul");
+            self.start_tag("ul", &[]);
             self.nl();
         }
 
@@ -604,7 +565,7 @@ impl <'a> HtmlRenderer<'a> {
         }
 
         self.nl();
-        self.start_tag_id_class_style(tag, id, class, style_attr.as_str());
+        self.start_tag(tag, &[("id", id), ("class", class), ("style", &style_attr)]);
 
         if let Some(elements) = &para.elements {
             for elt in elements {
@@ -703,7 +664,7 @@ impl <'a> HtmlRenderer<'a> {
                 - img_height * offset_top
             );
 
-            self.start_tag_style("span", &span_style);
+            self.start_tag("span", &[("style", &span_style)]);
 
             // Image ids are "kix.<id>" where <id> seems to be 12 base-36 chars
             if id.starts_with("kix.") {
@@ -803,14 +764,14 @@ impl <'a> HtmlRenderer<'a> {
 
         // Start <del>, <sup> etc.
         for elt in &elts {
-            self.start_tag(elt);
+            self.start_tag(elt, &[]);
         }
 
         // Start <span> if we have custom styles. We do not add style on a surrounding tag, as it
         // may conflict with that tag's default styling (e.g. strike-through in <del> may be
         // overriden by an underlined style)
         if style_attr.len() > 0 {
-            self.start_tag_style("span", &style_attr);
+            self.start_tag("span", &[("style", &style_attr)]);
         }
 
         // Content

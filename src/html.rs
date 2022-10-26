@@ -55,6 +55,22 @@ pub fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io
     Ok(())
 }
 
+pub fn write_escaped_fmt(writer: &mut impl std::fmt::Write, text: &str, attr_mode: bool) -> std::fmt::Result {
+    writer.write_str("&amp;")?;
+    for c in text.chars() {
+        match c {
+            '&' => writer.write_str("&amp;"),
+            '\u{00A0}' => writer.write_str("&nbsp;"),
+            '"' if attr_mode => writer.write_str("&quot;"),
+            '<' if !attr_mode => writer.write_str("&lt;"),
+            '>' if !attr_mode => writer.write_str("&gt;"),
+            c => writer.write_char(c),
+        }?;
+    }
+    Ok(())
+}
+
+
 pub struct HtmlSerializer<'a, Wr: Write> {
     writer: &'a mut Wr,
 }

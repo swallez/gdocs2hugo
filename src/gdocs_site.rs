@@ -141,14 +141,6 @@ impl Default for DateTimeWithDefault {
     }
 }
 
-fn deser_csv_date<'de, D: Deserializer<'de>>(deserializer: D) -> Result<DateTimeWithDefault, D::Error> {
-    let s = String::deserialize(deserializer)?;
-    Ok(DateTimeWithDefault(
-        Utc.datetime_from_str(&s, "%d/%m/%Y %H:%M:%S")
-            .map_err(serde::de::Error::custom)?,
-    ))
-}
-
 fn deser_csv_date_option<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<DateTimeWithDefault>, D::Error> {
@@ -162,7 +154,6 @@ fn deser_csv_date_option<'de, D: Deserializer<'de>>(
         Ok(Some(DateTimeWithDefault(t)))
     }
 }
-
 
 lazy_static! {
     static ref DOC_ID_RE: Regex =

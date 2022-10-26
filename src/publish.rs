@@ -58,7 +58,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
                 return Ok(());
             }
 
-            let rt_guard = rt.enter();
+            let _guard = rt.enter();
 
 
             if site_doc.slug.starts_with("/#data/") {
@@ -81,7 +81,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
                 let items = rdr.deserialize()
                     // First line after the header is the human-readable column names: skip it
                     .skip(1)
-                    .map_ok(|mut data: DataItem| {
+                    .map_ok(|data: DataItem| {
                         (data.id, data.fields)
                     })
                     .collect::<csv::Result<BTreeMap<String, BTreeMap<String, String>>>>()?;
@@ -108,7 +108,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
                 fs::write(&doc_path, &html)
                     .with_context(|| format!("Failed to write html rendering {:?}", &doc_path))?;
 
-                println!("Saved rendered html to {:?}", doc_path);
+                //println!("Saved rendered html to {:?}", doc_path);
             }
 
             let mut dom = scraper::Html::parse_document(&html);
@@ -239,7 +239,7 @@ pub fn download_image(img: &ImageReference, url: &str, site_dir: impl AsRef<Path
     let extension = images::download_and_store(img.src, base_path, |_img_bytes, extension| {
         if let Some(path) = store_path {
             let img_path = path
-                .join(&url[1..])
+                .join(&url[1..]).join(img.id)
                 .with_extension(extension);
 
             println!("Would store original image at {:?}", img_path);
@@ -247,7 +247,7 @@ pub fn download_image(img: &ImageReference, url: &str, site_dir: impl AsRef<Path
     })?;
 
     // Image is stored in the page's directory, so return a relative url
-    Ok(format!("{}.{}", img.id, extension))
+    Ok(format!("{}/{}.{}", url, img.id, extension))
 
 }
 //--------------------------------------------------------------------------------------------------
