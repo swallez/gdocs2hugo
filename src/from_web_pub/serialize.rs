@@ -2,7 +2,6 @@ use html5ever::serialize::{HtmlSerializer, SerializeOpts};
 use markup5ever::serialize::{AttrRef, Serialize, Serializer, TraversalScope};
 use markup5ever::QualName;
 use std::io;
-use nom::AsBytes;
 
 /// A DOM serializer that produces a stable output.
 ///

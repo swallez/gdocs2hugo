@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 # Base stuff
-anyhow = "1.0"
+anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
 indoc = "1.0.7"
 itertools = "0.10.3"
@@ -47,6 +47,7 @@ hyper-rustls = "*"
 tokio = "*"
 bytes = "*"
 mime_guess = "2.0.4"
+http = "*"
 
 # Used for images
 image = "0.24.3"
@@ -55,3 +56,8 @@ image = "0.24.3"
 google-docs1 = "3.1.0"
 google-drive3 = "4.0.1"
 google-sheets4 = "3.1.0"
+testresult = "0.1"
+
+[dev-dependencies]
+insta = { version = "1.24.1", features = ["yaml"] }
+testresult = "0.1"

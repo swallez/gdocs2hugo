@@ -8,7 +8,6 @@ use std::fmt::{Display, Formatter, Write as FmtWrite};
 use std::ops::AddAssign;
 use std::path::Path;
 use google_docs1::api as docs;
-use itertools::Itertools;
 use crate::html::HtmlConsumer;
 use anyhow::{anyhow, bail};
 

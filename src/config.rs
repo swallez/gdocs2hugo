@@ -44,13 +44,6 @@ pub enum Commands {
     },
     Gdoc,
 
-    /// Download gdocs content
-    Download2 {
-        /// Download all pages (ignore publication status)
-        #[clap(long)]
-        all: bool,
-    },
-
     /// Publish downloaded gdocs content to the Hugo content dir
     Publish2 {
         /// Keep a copy of json docs and raw images

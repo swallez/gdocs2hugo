@@ -15,6 +15,7 @@ use regex::Regex;
 pub fn download_toc(toc_url: &str, download_dir: &Path) -> anyhow::Result<Vec<DocData>> {
     fs::create_dir_all(download_dir).with_context(|| format!("Cannot create directory {:?}", download_dir))?;
 
+    println!("Downloading ToC from {}", toc_url);
     let csvtext = reqwest::blocking::get(toc_url)?
         .text()
         .context("Failed to download ToC spreadsheet")?;
@@ -28,8 +29,12 @@ pub fn download_toc(toc_url: &str, download_dir: &Path) -> anyhow::Result<Vec<Do
 }
 
 pub fn download_html_docs(docs: &Vec<DocData>, download_dir: &Path, all: bool) -> anyhow::Result<()> {
+    let rt = tokio::runtime::Handle::try_current();
     docs.par_iter()
-        .map(|doc| download_html_doc(&doc, download_dir, all))
+        .map(|doc| {
+            let _guard = rt.as_ref().map(|rt| rt.enter());
+            download_html_doc(&doc, download_dir, all)
+        })
         .collect::<anyhow::Result<Vec<()>>>()?; // Report any error downloading docs
     Ok(())
 }

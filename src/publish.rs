@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use crate::{config, SiteData, tweaks};
 use crate::gdocs_site;
 use crate::gdocs_site::DocData;
@@ -7,12 +7,11 @@ use std::fs;
 use std::path::Path;
 use anyhow::Result;
 use anyhow::Context;
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use bytes::Buf;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use indoc::indoc;
-use rayon::prelude::*;
 use tendril::fmt::Slice;
 use crate::gdoc_to_html::ImageReference;
 use crate::hugo_site::FrontMatter;
@@ -140,7 +139,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
             //----- Apply tweaks
 
-            tweak_dom(&doc_id, &mut dom, &mut fm, &site_data, &config, store)?;
+            tweak_dom(&gdocs_api, &doc_id, &mut dom, &mut fm, &site_data, &config, store)?;
 
             //----- And store to its final location
 
@@ -205,11 +204,12 @@ pub fn write_doc(dom: &scraper::Html, fm: &FrontMatter, site_data: &SiteData, hu
 ///
 /// Tweak the raw document, extracting front-matter information, downloading images, etc
 ///
-pub fn tweak_dom(_doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, site_data: &SiteData, config: &config::Config, store: bool) -> Result<()> {
+pub fn tweak_dom(gdocs_api: &google_docs1::Docs, _doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, site_data: &SiteData, config: &config::Config, store: bool) -> Result<()> {
 
     tweaks::remove_head(dom);
 
     tweaks::import_img_elts(dom, |img| download_image(
+            gdocs_api,
             img,
             fm.url.as_ref().unwrap(),
             &config.hugo_site_dir,
@@ -226,7 +226,13 @@ pub fn tweak_dom(_doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, s
     Ok(())
 }
 
-pub fn download_image(img: &ImageReference, url: &str, site_dir: impl AsRef<Path>, store_path: Option<&Path>) -> Result<String> {
+pub fn download_image(
+    gdocs_api: &google_docs1::Docs,
+    img: &ImageReference,
+    url: &str,
+    site_dir: impl AsRef<Path>,
+    store_path: Option<&Path>
+) -> Result<String> {
 
     // if let Some(path) = store_path {
     //     let json_path = config.download_dir
@@ -236,7 +242,7 @@ pub fn download_image(img: &ImageReference, url: &str, site_dir: impl AsRef<Path
 
     let base_path = site_dir.as_ref().join("content").join(&url[1..]).join(img.id);
 
-    let extension = images::download_and_store(img.src, base_path, |_img_bytes, extension| {
+    let extension = images::download_and_store(gdocs_api, img.src, base_path, |_img_bytes, extension| {
         if let Some(path) = store_path {
             let img_path = path
                 .join(&url[1..]).join(img.id)
@@ -349,6 +355,55 @@ pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google
 
     Ok(gdrive_api)
 }
+
+/// Download the contents of a URL with GDrive permissions.
+/// Returns the corresponding file extension and bytes
+pub async fn download_url(hub: &google_docs1::Docs, url: &str) -> anyhow::Result<(&'static str, bytes::Bytes)> {
+
+    use google_docs1::api::Scope;
+    use google_docs1::client;
+    use http::header::AUTHORIZATION;
+    use http::header::USER_AGENT;
+    use http::header::CONTENT_TYPE;
+
+    // Downloading images embedded in documents requires Google Drive read access
+    let token = match hub.auth.token(&[Scope::DriveReadonly]).await {
+        Ok(token) => token.clone(),
+        Err(err) => {
+            bail!(client::Error::MissingToken(err))
+        }
+    };
+
+    let mut response = {
+        let client = &hub.client;
+
+        let request = hyper::Request::builder()
+            .method(hyper::Method::GET)
+            .uri(url)
+            .header(USER_AGENT, "google-api-rust-client/3.1.0")
+            .header(AUTHORIZATION, format!("Bearer {}", token.as_str()))
+            .body(hyper::body::Body::empty())?;
+
+        client.request(request).await?
+    };
+
+    if !response.status().is_success() {
+        bail!("HTTP failure: {} for {}", response.status(), url);
+    }
+
+    let content_type = response.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
+    let mut extension = mime_guess::get_mime_extensions_str(content_type).unwrap()[0];
+    if extension == "jpe" {
+        // jpe is the first extension listed for jpeg. Although it's a valid extension, not all
+        // tools recognize it.
+        extension = "jpg";
+    }
+
+    let bytes = hyper::body::to_bytes(response.body_mut()).await?;
+
+    Ok((extension, bytes))
+}
+
 //--------------------------------------------------------------------------------------------------
 ///
 /// Download a Google doc in its JSON form from its URL, and optionally stores it for debugging

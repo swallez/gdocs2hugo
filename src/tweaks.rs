@@ -1,6 +1,4 @@
-use std::borrow::BorrowMut;
 use std::collections::hash_map::DefaultHasher;
-use std::fmt::Debug;
 use std::hash::Hasher;
 use crate::hugo_site::FrontMatter;
 use scraper::Selector;
@@ -136,9 +134,11 @@ pub fn import_img_elts(doc: &mut scraper::Html, resolver: impl Fn(&ImageReferenc
         .collect::<Vec<_>>();
 
     // Parallel import all images and rewrite src
+    let rt = tokio::runtime::Handle::try_current();
     let ids_and_new_src = ids_and_src
         .into_par_iter()
         .map(|(node_id, img_id, src)| {
+            let _guard = rt.as_ref().map(|rt| rt.enter());
             let img_ref = ImageReference {
                 id: &img_id,
                 src: &src

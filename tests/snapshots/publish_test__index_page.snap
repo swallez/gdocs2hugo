@@ -1,0 +1,88 @@
+---
+source: tests/publish_test.rs
+assertion_line: 24
+expression: html
+---
+<html>
+<head>
+<title>Page d'accueil Pro</title>
+</head>
+<body>
+<p>Accompagnement psychologique des éco-émotions, écoanxiété, éco-anxiété, solastalgie, personnes éco-sensibles. Interventions auprès des particuliers et des organisations.</p>
+<h1 id="h.vez65on3xhzp">Claire Wallez, Psychologue</h1>
+<!--{{< section >}}--><!--{{< vignette >}}--><div class="row">    <div class="col-md-9">
+<h2 id="h.vgg9x3qq9y6">Bienvenue</h2>
+<p>Je suis psychologue et psychothérapeute, diplômée de l’Université Jean Jaurès de Toulouse depuis 2019, après une carrière dans l’industrie et dans le domaine de la formation.</p>
+<p><strong>Dans un cadre de confidentialité, de bienveillance et de non jugement de la personne,</strong> je vous accompagne dans le cadre d’une psychothérapie ou d’un accompagnement psychologique.</p>
+<p>J’accompagne tout type de difficultés et de souffrance, en particulier <strong>le stress, le burn-out, l’anxiété, la dépression,  les problèmes relationnels</strong>, etc.</p>
+<p>Je suis aussi particulièrement <strong>sensibilisée à l’accompagnement des personnes éco-sensibles</strong> qui ont des difficultés en lien avec les dérèglements environnementaux et plus généralement avec l’état actuel du monde (<strong>écoanxiété, solastalgie</strong>). Je vous aide sur les différentes sphères de votre vie impactées par ces difficultés. </p>
+<p>J'adapte mes modalités d'intervention en fonction de votre problématique en m’appuyant sur une <strong>psychologie humaniste</strong>, sur la <strong>thérapie intégrative ACT</strong> (Thérapie d’acceptation et d’engagement) qui est une TCC (Thérapie Comportementale et Cognitive), ainsi que d’autres outils complémentaires (relaxation, cohérence cardiaque, etc.).</p>
+<p>J’interviens auprès des <a href='#h.d69354vgs69t'>particuliers</a>, des <a href='#h.824fmfh0eu6h'>organisations</a> et sur des actions de <a href='#h.qhzf672rvkux'>sensibilisation auprès du grand public</a>.</p>
+<!--{{< contact topic="home/intro" p-class="text-center" class="btn-primary" text="Me contacter" >}}-->
+    </div>    <div class="col-md-3 offset-md-0 col-sm-6 offset-sm-3 col-8 offset-2">        <div class="rounded-3 shadow-md my-1">          <img alt="Claire Wallez" class="img-fluid img-thumbnail p-3" src="/img/claire.jpg">        </div>    </div>  </div><!--{{< /vignette >}}--><!--{{< /section >}}--><!--{{< shape-bowl class="text-gradient-top" >}}--><!--{{< section >}}--><!--{{< vignette-title >}}-->
+<h2 id="h.l4vlritiz26o">Mes prestations</h2>
+<!--{{< /vignette-title >}}--><!--{{< vignette-start class="col-md-5" >}}-->
+<h2 id="h.d69354vgs69t">Particuliers</h2>
+<p>Je vous accompagne dans l’<strong>apprivoisement de vos difficultés</strong>. Mon objectif est de <strong>vous soutenir dans votre cheminement personnel</strong>, de vous aider à retrouver votre <strong>capacité à fonctionner au quotidien </strong>et à <strong>avancer vers ce qui fait sens pour vous</strong>.</p>
+<p>L’accompagnement se fait <strong>en cabinet sur Toulouse</strong> (Villa Santé, 19 rue de Fenouillet - métro Barrière de Paris, ligne B) <strong>ou en visioconférence</strong>, en individuel ou en groupe.</p>
+<!--{{< /vignette-start >}}--><!--{{< vignette-end class="col-md-7" >}}-->
+<h4 id="h.n3scrg4qwodn">Accompagnement psychologique et travail en psychothérapie</h4>
+<ul>
+<li><a href='https://docs.google.com/document/d/1MvB-OkZy7p618dYtBZDZqimoEacNnMA0ZAz6sqgykIU/edit#'>Accompagnement individuel</a> - Espace d’écoute bienveillante et de travail en psychothérapie où je vous accompagne pour vous aider à aller mieux et à retrouver votre capacité à avancer</li>
+<li><a href='https://docs.google.com/document/d/1_g9EoDMrC-8T4OMDQ2UzuhD9QSfnGbdD7J_UX4t8eI4/edit#'>Groupes de soutien et de partage</a> - Espace de confiance animé par une psychologue pour se soutenir et avancer entre personnes qui ressentent de l’écoanxiété</li>
+</ul>
+<p></p>
+<h4 id="h.r85c0bt0innb">Accompagnement complémentaire</h4>
+<ul>
+<li><a href='https://docs.google.com/document/d/1MOmVnWvgih0p5CJIMQtqxM0MN_2PgIPYX4yLJ9KnVf0/edit'>Boîtes à outils</a> - Pour cheminer en autonomie</li>
+<li>Mise à disposition de <a href='https://docs.google.com/document/u/0/d/1PTiKMYYBluRd0pwiefAFeCJHHyxFqCndM9LL71k7kEs/edit'>ressources gratuites</a> sur l’éco-anxiété</li>
+<li>Participation bénévole à des ateliers de parole proposés par le collectif toulousain “<a href='https://www.facebook.com/profile.php?id=100085387333508'>Les écolos Anonymes</a>”</li>
+</ul>
+<div class="text-center btn btn-primary">
+<p><a href='https://docs.google.com/document/u/0/d/1a855oSSghrKNnZ4E__mSMAicIXahouXB_MG5K0272d0/edit'>En savoir plus</a></p>
+</div><!--{{< /vignette-end >}}--><!--{{< vignette-start class="col-md-5" >}}-->
+<h2 id="h.824fmfh0eu6h">Organisations</h2>
+<p>Entreprises, collectivités, associations, universités, écoles supérieures, lycées</p>
+<p>Je vous accompagne dans la <strong>compréhension de ce que sont les écoémotions et comment elles peuvent affecter le fonctionnement de votre organisation</strong>. Je vous aide à co-construire des solutions pour adapter vos pratiques à la quête de sens de vos salariés et/ou usagers. Je peux aussi accompagner les personnes de votre structure qui ressentent de l’écoanxiété.</p>
+<!--{{< /vignette-start >}}--><!--{{< vignette-end class="col-md-7" >}}-->
+<h4 id="h.9uh6fzfdgu5w">Thématiques d’intervention</h4>
+<ul>
+<li>Pensées et émotions désagréables liées aux bouleversements écologiques. Eco-anxiété</li>
+<li>Recréer le lien à soi et autour de soi, aux autres, à la nature</li>
+</ul>
+<h4 id="h.cgmonpw67l4m">Exemples de déclinaisons</h4>
+<p>Adaptation à la structure, au public et aux besoins</p>
+<ul>
+<li><strong>Sensibilisation</strong> : j’anime des séances qui permettent une compréhension partagée de la thématique sélectionnée </li>
+<li><strong>Co-construction de solutions</strong> : j’implique votre équipe lors d’ateliers créatifs pour faire émerger une solution adaptée à votre problématique</li>
+<li><strong>Accompagnement</strong> : j’analyse avec les personnes quels sont leurs besoins et je les aide à avancer vers ce qui fait sens pour elles</li>
+</ul>
+<h4 id="h.ifjk4aih81u6">Exemple de formats d’intervention</h4>
+<ul>
+<li>Ateliers - Séminaires</li>
+<li>Accompagnement</li>
+<li>Formation</li>
+<li>Conférence</li>
+</ul>
+<div class="text-center btn btn-primary">
+<p><a href='https://docs.google.com/document/u/0/d/1tdVyEd6sESiBqZHQwIi2TGUqFgIagDo0Arln8RTfCVg/edit'>En savoir plus</a></p>
+</div><!--{{< /vignette-end >}}--><!--{{< vignette-start class="col-md-5" >}}-->
+<h2 id="h.qhzf672rvkux">Grand public</h2>
+<p>Je participe à la sensibilisation du grand public sur l’écoanxiété et les éco-émotions.</p>
+<p>Parallèlement, j’ai une activité de facilitatrice d’ateliers, notamment des ateliers de fresque de biodiversité, de fresque des nouveaux récits ou de fresque du climat. </p>
+<!--{{< /vignette-start >}}--><!--{{< vignette-end class="col-md-7" >}}-->
+<h4 id="h.tahvy7mw7l1">Créatrice et autrice</h4>
+<p>Site <a href='http://www.psychologie-et-climat.fr'>psychologie-et-climat.fr</a></p>
+<p></p>
+<h4 id="h.dhqjzf9muwf2">Conférence et médias</h4>
+<ul>
+<li>Conférences en ligne ou en présentiel</li>
+<li>Médias, radio, presse écrite, presse en ligne</li>
+</ul>
+<div class="text-center btn btn-primary">
+<p><a href='https://docs.google.com/document/u/0/d/1glLCZgzxBJX6qSKHNKaGnKdZgqV8kiFrGVtYmespnhg/edit'>En savoir plus</a></p>
+</div><!--{{< /vignette-end >}}--><!--{{< /section >}}--><!--{{< shape-bowl class="text-gradient-top" >}}--><!--{{< section class="pb-5" >}}--><!--{{< vignette-title >}}-->
+<p></p>
+</body>
+</html>
+

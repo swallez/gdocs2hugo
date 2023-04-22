@@ -41,7 +41,6 @@ fn nl(writer: &mut impl Write) -> io::Result<()> {
 
 // Borrowed from html5ever's HtmlSerializer
 pub fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io::Result<()> {
-    writer.write_all(b"&amp;")?;
     for c in text.chars() {
         match c {
             '&' => writer.write_all(b"&amp;"),
@@ -56,7 +55,6 @@ pub fn write_escaped(writer: &mut impl Write, text: &str, attr_mode: bool) -> io
 }
 
 pub fn write_escaped_fmt(writer: &mut impl std::fmt::Write, text: &str, attr_mode: bool) -> std::fmt::Result {
-    writer.write_str("&amp;")?;
     for c in text.chars() {
         match c {
             '&' => writer.write_str("&amp;"),

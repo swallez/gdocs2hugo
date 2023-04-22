@@ -6,7 +6,7 @@ pub async fn _download() -> anyhow::Result<()> {
 
 pub async fn _download_sheet() -> anyhow::Result<()> {
 
-    let creds = google_drive3::oauth2::read_service_account_key("gdocs-cms-358516-f352fa296fe1.json").await?;
+    let creds = google_drive3::oauth2::read_service_account_key("../credentials-gdocs-cms.json").await?;
 
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
@@ -42,7 +42,7 @@ pub async fn _download_sheet() -> anyhow::Result<()> {
 
 pub async fn _download1() -> anyhow::Result<()> {
 
-    let creds = google_drive3::oauth2::read_service_account_key("gdocs-cms-358516-f352fa296fe1.json").await?;
+    let creds = google_drive3::oauth2::read_service_account_key("../credentials-gdocs-cms.json").await?;
 
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
@@ -78,7 +78,7 @@ pub async fn _download1() -> anyhow::Result<()> {
 
 pub async fn _download_doc() -> anyhow::Result<()> {
 
-    let creds = google_docs1::oauth2::read_service_account_key("gdocs-cms-358516-f352fa296fe1.json").await?;
+    let creds = google_docs1::oauth2::read_service_account_key("../credentials-gdocs-cms.json").await?;
 
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
