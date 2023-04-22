@@ -11,8 +11,7 @@ pub async fn _download_sheet() -> anyhow::Result<()> {
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
-        .enable_http1()
-        .enable_http2()
+        .enable_all_versions()
         .build();
 
     let client = hyper::Client::builder()
@@ -47,8 +46,7 @@ pub async fn _download1() -> anyhow::Result<()> {
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
-        .enable_http1()
-        .enable_http2()
+        .enable_all_versions()
         .build();
 
     let client = hyper::Client::builder()
@@ -83,8 +81,7 @@ pub async fn _download_doc() -> anyhow::Result<()> {
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
-        .enable_http1()
-        .enable_http2()
+        .enable_all_versions()
         .build();
 
     let client = hyper::Client::builder()

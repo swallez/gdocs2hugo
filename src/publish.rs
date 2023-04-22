@@ -306,8 +306,7 @@ pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
-        .enable_http1()
-        .enable_http2()
+        .enable_all_versions()
         .build();
 
     let client = hyper::Client::builder()
@@ -338,8 +337,7 @@ pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google
     let connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
-        .enable_http1()
-        .enable_http2()
+        .enable_all_versions()
         .build();
 
     let client = hyper::Client::builder()
