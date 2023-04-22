@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 use anyhow::Result;
+use crate::publish::HyperC;
 
 /// Download an image to a base path (relative path without extension) and returns the extension
 /// that was chosen according to the mime-type.
@@ -9,7 +10,7 @@ use anyhow::Result;
 /// with the original image and extension, e.g. to keep it somewhere.
 /// 
 pub fn download_and_store(
-    gdocs_api: &google_docs1::Docs,
+    gdocs_api: &google_docs1::Docs<HyperC>,
         url: &str,
         base_path: impl AsRef<Path>,
         handle_raw: impl FnOnce(&bytes::Bytes, &str)

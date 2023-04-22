@@ -8,14 +8,14 @@ version = "0.1.0"
 # Base stuff
 anyhow = { version = "1.0", features = ["backtrace"] }
 chrono = { version = "0.4.19", features = ["serde"] }
-indoc = "1.0.7"
+indoc = "2.0.1"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 maplit = "1.0.2"
 regex = "1.6.0"
 clap = { version="3.2.17", features = ["derive"] }
 rayon = "1.5.3"
-backtrace-on-stack-overflow = "0.2.0"
+backtrace-on-stack-overflow = "0.3.0"
 
 # Serde and formats
 serde = {version = "1.0.142" }
@@ -31,7 +31,7 @@ markup5ever = "0.11.0"
 cssparser = "0.29.6"
 string_cache = "0.8.4"
 
-scraper = "0.13.0"
+scraper = "0.16.0"
 selectors = "*"
 ego-tree = "*"
 tendril = "*"
@@ -53,11 +53,10 @@ http = "*"
 image = "0.24.3"
 
 ## Google docs
-google-docs1 = "3.1.0"
-google-drive3 = "4.0.1"
-google-sheets4 = "3.1.0"
-testresult = "0.1"
+google-docs1 = "5.0.2"
+google-drive3 = "5.0.2"
+google-sheets4 = "5.0.2"
 
 [dev-dependencies]
 insta = { version = "1.24.1", features = ["yaml"] }
-testresult = "0.1"
+testresult = "0.3.0"

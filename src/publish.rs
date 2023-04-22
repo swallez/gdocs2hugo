@@ -204,7 +204,7 @@ pub fn write_doc(dom: &scraper::Html, fm: &FrontMatter, site_data: &SiteData, hu
 ///
 /// Tweak the raw document, extracting front-matter information, downloading images, etc
 ///
-pub fn tweak_dom(gdocs_api: &google_docs1::Docs, _doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, site_data: &SiteData, config: &config::Config, store: bool) -> Result<()> {
+pub fn tweak_dom(gdocs_api: &google_docs1::Docs<HyperC>, _doc_id: &str, dom: &mut scraper::Html, fm: &mut FrontMatter, site_data: &SiteData, config: &config::Config, store: bool) -> Result<()> {
 
     tweaks::remove_head(dom);
 
@@ -227,7 +227,7 @@ pub fn tweak_dom(gdocs_api: &google_docs1::Docs, _doc_id: &str, dom: &mut scrape
 }
 
 pub fn download_image(
-    gdocs_api: &google_docs1::Docs,
+    gdocs_api: &google_docs1::Docs<HyperC>,
     img: &ImageReference,
     url: &str,
     site_dir: impl AsRef<Path>,
@@ -298,7 +298,7 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
 ///
 /// Create the Google Docs client
 ///
-pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_docs1::Docs> {
+pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_docs1::Docs<HyperC>> {
 
     let creds = google_docs1::oauth2::read_service_account_key(creds_path).await
         .context("Problem loading credentials")?;
@@ -324,7 +324,7 @@ pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_
     Ok(gdocs_api)
 }
 
-type HyperC = HttpsConnector<HttpConnector>;
+pub type HyperC = HttpsConnector<HttpConnector>;
 
 //--------------------------------------------------------------------------------------------------
 ///
@@ -358,7 +358,7 @@ pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google
 
 /// Download the contents of a URL with GDrive permissions.
 /// Returns the corresponding file extension and bytes
-pub async fn download_url(hub: &google_docs1::Docs, url: &str) -> anyhow::Result<(&'static str, bytes::Bytes)> {
+pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow::Result<(&'static str, bytes::Bytes)> {
 
     use google_docs1::api::Scope;
     use google_docs1::client;
@@ -367,7 +367,7 @@ pub async fn download_url(hub: &google_docs1::Docs, url: &str) -> anyhow::Result
     use http::header::CONTENT_TYPE;
 
     // Downloading images embedded in documents requires Google Drive read access
-    let token = match hub.auth.token(&[Scope::DriveReadonly]).await {
+    let token = match hub.auth.get_token(&[Scope::DriveReadonly.as_ref()]).await {
         Ok(token) => token.clone(),
         Err(err) => {
             bail!(client::Error::MissingToken(err))
@@ -377,11 +377,16 @@ pub async fn download_url(hub: &google_docs1::Docs, url: &str) -> anyhow::Result
     let mut response = {
         let client = &hub.client;
 
-        let request = hyper::Request::builder()
+        let mut request = hyper::Request::builder()
             .method(hyper::Method::GET)
             .uri(url)
-            .header(USER_AGENT, "google-api-rust-client/3.1.0")
-            .header(AUTHORIZATION, format!("Bearer {}", token.as_str()))
+            .header(USER_AGENT, "google-api-rust-client/3.1.0");
+
+        if let Some(token) = token {
+            request = request.header(AUTHORIZATION, format!("Bearer {}", token));
+        }
+
+        let request = request
             .body(hyper::body::Body::empty())?;
 
         client.request(request).await?
@@ -409,10 +414,10 @@ pub async fn download_url(hub: &google_docs1::Docs, url: &str) -> anyhow::Result
 /// Download a Google doc in its JSON form from its URL, and optionally stores it for debugging
 /// purposes.
 ///
-pub fn download_gdoc_json(
+pub fn download_gdoc_json (
     site_doc: &DocData,
     config: &config::Config,
-    gdocs_api: &google_docs1::Docs,
+    gdocs_api: &google_docs1::Docs<HyperC>,
     rt: &tokio::runtime::Runtime,
     store: bool,
 ) -> Result<google_docs1::api::Document> {
