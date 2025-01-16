@@ -94,7 +94,7 @@ impl SiteData {
                     Ok(Some(format!("{}/", slug)))
                 } else {
                     //Ok(None)
-                    bail!("Google doc id not found in site pages {}", url)
+                    bail!("Found a link to a GDoc that is not in the page list: id={}", id)
                 }
             } else {
                 // Legacy lookup, for "export to web" URLs

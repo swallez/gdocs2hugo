@@ -113,7 +113,7 @@ impl <Wr: Write> HtmlConsumer for HtmlSerializer<'_, Wr> {
 
         if !classes.is_empty() {
             write!(self.writer, " class=\"")?;
-            for cl in classes.into_iter().intersperse(" ") {
+            for cl in Itertools::intersperse(classes.into_iter(), " ") {
                 write_escaped(self.writer, cl, true)?;
             }
             write!(self.writer, "\"")?;

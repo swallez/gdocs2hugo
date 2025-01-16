@@ -7,8 +7,9 @@ use anyhow::Context;
 use rayon::prelude::*;
 use std::fs;
 use serde::{Deserialize, Deserializer};
-use chrono::{TimeZone, Utc};
+use chrono::{NaiveDateTime, Utc};
 use itertools::Itertools;
+use lazy_regex::regex;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -153,9 +154,10 @@ fn deser_csv_date_option<'de, D: Deserializer<'de>>(
     if s.is_empty() {
         Ok(None)
     } else {
-        let t = Utc
-            .datetime_from_str(&s, "%d/%m/%Y %H:%M:%S")
-            .map_err(serde::de::Error::custom)?;
+        let t = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+            .map_err(serde::de::Error::custom)?
+            .and_local_timezone(Utc)
+            .unwrap();
         Ok(Some(DateTimeWithDefault(t)))
     }
 }

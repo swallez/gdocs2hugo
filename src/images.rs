@@ -8,7 +8,7 @@ use crate::publish::HyperC;
 ///
 /// Images are stored in `dir`. Large PNGs are compressed to JPG, and `handle_raw` is called
 /// with the original image and extension, e.g. to keep it somewhere.
-/// 
+///
 pub fn download_and_store(
     gdocs_api: &google_docs1::Docs<HyperC>,
         url: &str,
@@ -16,8 +16,17 @@ pub fn download_and_store(
         handle_raw: impl FnOnce(&bytes::Bytes, &str)
     ) -> Result<&'static str> {
 
-    //FIXME: only download if there's no file starting with `base_path`
     let base_path = base_path.as_ref();
+
+    // Only download if there's no file starting with `base_path`
+    if let Some(Result::Ok(path)) = glob::glob(&format!("{}.*", &base_path.display()))?.next() {
+        // println!("Already downloaded image {:?}", &base_path);
+        match path.extension() {
+            Some(ext) if ext == "jpg" => return Ok("jpg"),
+            Some(ext) if ext == "png" => return Ok("png"),
+            _ => {}, // continue downloading
+        }
+    }
 
     let rt = tokio::runtime::Handle::current();
     let _guard = rt.enter();

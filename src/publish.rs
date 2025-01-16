@@ -9,7 +9,8 @@ use anyhow::Result;
 use anyhow::Context;
 use anyhow::{anyhow, bail};
 use bytes::Buf;
-use hyper::client::HttpConnector;
+use google_drive3::api::Scope;
+use hyper014::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use indoc::indoc;
 use tendril::fmt::Slice;
@@ -17,6 +18,7 @@ use crate::gdoc_to_html::ImageReference;
 use crate::hugo_site::FrontMatter;
 use crate::images;
 use itertools::Itertools;
+use rayon::prelude::*;
 
 #[derive(Serialize, Deserialize)]
 struct DataItem {
@@ -49,8 +51,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
     //----- Publish docs
 
-    //docs.into_par_iter()
-    docs.into_iter()
+    docs.into_par_iter()
         .map(|site_doc| {
             if !site_doc.publish && !all {
                 println!("Skipping '{}' (not published)", site_doc.slug);
@@ -59,15 +60,17 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
             let _guard = rt.enter();
 
-
             if site_doc.slug.starts_with("/#data/") {
 
                 let sheet_id = gdocs_site::get_doc_id(site_doc.gdoc_url.as_ref().unwrap())
                     .ok_or_else(|| anyhow!("Failed to extract doc id from {:?}", site_doc.gdoc_url))?;
 
                 let bytes: bytes::Bytes = tokio::runtime::Handle::current().block_on(async {
-                    let mut response = gdrive_api.files().export(sheet_id, "text/csv").doit().await?;
-                    let bytes = hyper::body::to_bytes(response.body_mut()).await?;
+                    let mut response = gdrive_api.files()
+                        .export(sheet_id, "text/csv")
+                        .add_scope(Scope::Readonly) // Otherwise we'll get a 404
+                        .doit().await?;
+                    let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
                     <Result<_>>::Ok(bytes)
                 })
                     .context("Failed to download data document")?;
@@ -94,7 +97,6 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
             }
 
             //----- Load doc JSON
-            println!("Downloading {}", &site_doc.slug);
             let gdoc = download_gdoc_json(&site_doc, &config, &gdocs_api, &rt, store)?;
 
             //----- Convert doc JSON to HTML and DOM
@@ -265,9 +267,14 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
     let toc_id = gdocs_site::get_doc_id(&config.toc_spreadsheet_url)
         .ok_or_else(|| anyhow!("Cannot extract ToC doc id from {}", config.toc_spreadsheet_url))?;
 
+    println!("Downloading ToC from GSheet id={}", toc_id);
+
     let bytes: bytes::Bytes = tokio::runtime::Handle::current().block_on(async {
-            let mut response = gdrive.files().export(toc_id, "text/csv").doit().await?;
-            let bytes = hyper::body::to_bytes(response.body_mut()).await?;
+            let mut response = gdrive.files()
+                .export(toc_id, "text/csv")
+                .add_scope(Scope::Readonly) // Otherwise we'll get a 404
+                .doit().await?;
+            let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
             <Result<_>>::Ok(bytes)
         })
         .context("Failed to download ToC spreadsheet")?;
@@ -309,8 +316,8 @@ pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_
         .enable_all_versions()
         .build();
 
-    let client = hyper::Client::builder()
-        .build::<_, hyper::Body>(connector);
+    let client = hyper014::Client::builder()
+        .build::<_, hyper014::Body>(connector);
 
     let auth = google_docs1::oauth2::ServiceAccountAuthenticator::builder(creds)
         .hyper_client(client.clone())
@@ -340,8 +347,8 @@ pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google
         .enable_all_versions()
         .build();
 
-    let client = hyper::Client::builder()
-        .build::<_, hyper::Body>(connector);
+    let client = hyper014::Client::builder()
+        .build::<_, hyper014::Body>(connector);
 
     let auth = google_drive3::oauth2::ServiceAccountAuthenticator::builder(creds)
         .hyper_client(client.clone())
@@ -375,8 +382,8 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
     let mut response = {
         let client = &hub.client;
 
-        let mut request = hyper::Request::builder()
-            .method(hyper::Method::GET)
+        let mut request = hyper014::Request::builder()
+            .method(hyper014::Method::GET)
             .uri(url)
             .header(USER_AGENT, "google-api-rust-client/3.1.0");
 
@@ -385,7 +392,7 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
         }
 
         let request = request
-            .body(hyper::body::Body::empty())?;
+            .body(hyper014::body::Body::empty())?;
 
         client.request(request).await?
     };
@@ -402,7 +409,7 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
         extension = "jpg";
     }
 
-    let bytes = hyper::body::to_bytes(response.body_mut()).await?;
+    let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
 
     Ok((extension, bytes))
 }
@@ -428,6 +435,8 @@ pub fn download_gdoc_json (
     let gdoc = rt.block_on(gdocs_api.documents().get(doc_id).doit())
         .with_context(|| format!("{} - Failed to load document.", site_doc.slug))?
         .1;
+
+    println!("Downloading GDoc for page at {} (id={})", &site_doc.slug, &doc_id);
 
     if store {
         let json_path = config.download_dir

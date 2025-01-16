@@ -100,9 +100,9 @@ enum AttrTag {
 // use nom::IResult;
 
 impl AttrTag {
-    pub fn parse_para<'a>(para: &'a google_docs1::api::Paragraph) -> anyhow::Result<Option<(AttrTag, &'a str)>> {
+    pub fn parse_para(para: &google_docs1::api::Paragraph) -> anyhow::Result<Option<(AttrTag, &str)>> {
         if let Some(ref elts) = para.elements {
-            if !(elts.is_empty()) {
+            if !elts.is_empty() {
                 if let Some(ref text) = elts[0].text_run {
                     if let Some(ref content) = text.content {
                         return AttrTag::parse(content);
@@ -113,7 +113,7 @@ impl AttrTag {
         Ok(None)
     }
 
-    pub fn parse<'a>(text: &'a str) -> anyhow::Result<Option<(AttrTag, &'a str)>> {
+    pub fn parse(text: &str) -> anyhow::Result<Option<(AttrTag, &str)>> {
         let mut text = text;
         if !text.starts_with("{: ") {
             if text.starts_with("{::}") {

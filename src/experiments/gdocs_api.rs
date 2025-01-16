@@ -14,9 +14,9 @@ pub async fn _download_sheet() -> anyhow::Result<()> {
         .enable_all_versions()
         .build();
 
-    let client = hyper::Client::builder()
+    let client = hyper014::Client::builder()
         //.pool_max_idle_per_host(0)
-        .build::<_, hyper::Body>(connector);
+        .build::<_, hyper014::Body>(connector);
 
     let auth = google_drive3::oauth2::ServiceAccountAuthenticator::builder(creds)
         .hyper_client(client.clone())
@@ -31,7 +31,7 @@ pub async fn _download_sheet() -> anyhow::Result<()> {
 
     let sheet = sheet.into_body();
 
-    let sheet = hyper::body::to_bytes(sheet).await?;
+    let sheet = hyper014::body::to_bytes(sheet).await?;
     let sheet = String::from_utf8_lossy(sheet.as_ref());
     println!("{}", sheet);
 
@@ -49,9 +49,9 @@ pub async fn _download1() -> anyhow::Result<()> {
         .enable_all_versions()
         .build();
 
-    let client = hyper::Client::builder()
+    let client = hyper014::Client::builder()
         //.pool_max_idle_per_host(0)
-        .build::<_, hyper::Body>(connector);
+        .build::<_, hyper014::Body>(connector);
 
     let auth = google_drive3::oauth2::ServiceAccountAuthenticator::builder(creds)
         .hyper_client(client.clone())
@@ -84,9 +84,9 @@ pub async fn _download_doc() -> anyhow::Result<()> {
         .enable_all_versions()
         .build();
 
-    let client = hyper::Client::builder()
+    let client = hyper014::Client::builder()
         //.pool_max_idle_per_host(0)
-        .build::<_, hyper::Body>(connector);
+        .build::<_, hyper014::Body>(connector);
 
     let auth = google_docs1::oauth2::ServiceAccountAuthenticator::builder(creds)
         .hyper_client(client.clone())
