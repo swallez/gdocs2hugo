@@ -150,11 +150,14 @@ impl Default for DateTimeWithDefault {
 fn deser_csv_date_option<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<DateTimeWithDefault>, D::Error> {
+    static FORMAT: &str = "%d/%m/%Y %H:%M:%S";
+
     let s = String::deserialize(deserializer)?;
     if s.is_empty() {
         Ok(None)
     } else {
-        let t = NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S")
+        let t = NaiveDateTime::parse_from_str(&s, FORMAT)
+            .with_context(|| format!("Failed to parse date '{}' with format {}", s, FORMAT))
             .map_err(serde::de::Error::custom)?
             .and_local_timezone(Utc)
             .unwrap();

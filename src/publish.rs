@@ -141,7 +141,8 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
             //----- Apply tweaks
 
-            tweak_dom(&gdocs_api, &doc_id, &mut dom, &mut fm, &site_data, &config, store)?;
+            tweak_dom(&gdocs_api, &doc_id, &mut dom, &mut fm, &site_data, &config, store)
+                .with_context(|| format!("GDoc id: {}", &doc_id))?;
 
             //----- And store to its final location
 
@@ -279,14 +280,6 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
         })
         .context("Failed to download ToC spreadsheet")?;
 
-    let mut docs = DocData::read_csv(bytes.clone().reader())
-        .context("Problem reading ToC spreadsheet")?;
-
-    for doc in &mut docs {
-        if doc.author.is_none() {
-            doc.author = config.default_author.clone();
-        }
-    }
 
     if store {
         std::fs::create_dir_all(&config.download_dir)?;
@@ -296,6 +289,15 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
             .with_context(|| format!("Failed to write ToC spreadsheet {:?}", &toc_path))?;
 
         println!("Saved table of contents to {:?}", toc_path);
+    }
+
+    let mut docs = DocData::read_csv(bytes.clone().reader())
+        .context("Problem reading ToC spreadsheet")?;
+
+    for doc in &mut docs {
+        if doc.author.is_none() {
+            doc.author = config.default_author.clone();
+        }
     }
 
     Ok(docs)
