@@ -381,22 +381,49 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
         }
     };
 
-    let mut response = {
+    // Follow redirects manually, as the hyper client doesn't do it.
+    const MAX_REDIRECTS: usize = 10;
+    let original_uri: hyper014::Uri = url.parse()?;
+    let mut current_url = url.to_string();
+    let mut redirects = 0;
+
+    let mut response = loop {
         let client = &hub.client;
+
+        let uri: hyper014::Uri = current_url.parse()?;
+
+        // Only send credentials to the original host, not to redirect targets on other hosts
+        let same_host = uri.host() == original_uri.host();
 
         let mut request = hyper014::Request::builder()
             .method(hyper014::Method::GET)
-            .uri(url)
+            .uri(uri)
             .header(USER_AGENT, "google-api-rust-client/3.1.0");
 
-        if let Some(token) = token {
+        if let (Some(token), true) = (&token, same_host) {
             request = request.header(AUTHORIZATION, format!("Bearer {}", token));
         }
 
-        let request = request
-            .body(hyper014::body::Body::empty())?;
+        let request = request.body(hyper014::body::Body::empty())?;
 
-        client.request(request).await?
+        let response = client.request(request).await?;
+
+        if response.status().is_redirection() {
+            let location = response.headers().get(http::header::LOCATION)
+                .and_then(|l| l.to_str().ok())
+                .ok_or_else(|| anyhow!("Redirect without Location header for {}", current_url))?;
+
+            redirects += 1;
+            if redirects > MAX_REDIRECTS {
+                bail!("Too many redirects for {}", url);
+            }
+
+            // Resolve relative locations against the current URL
+            current_url = reqwest::Url::parse(&current_url)?.join(location)?.to_string();
+            continue;
+        }
+
+        break response;
     };
 
     if !response.status().is_success() {
