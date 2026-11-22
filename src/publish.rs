@@ -47,7 +47,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
     //----- Build site data
 
-    let site_data = SiteData::new(&docs)?;
+    let site_data = SiteData::new(&docs, &config.no_target)?;
 
     //----- Publish docs
 

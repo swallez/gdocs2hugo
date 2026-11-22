@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail};
 use lazy_static::lazy_static;
@@ -25,6 +25,8 @@ use crate::gdocs_site::DocData;
 pub struct SiteData {
     url_to_slug: HashMap<String, String>,
     id_to_slug: HashMap<String, String>,
+    /// Domain names whose links must not get a `target` attribute
+    pub no_target: HashSet<String>,
 }
 
 lazy_static! {
@@ -33,7 +35,7 @@ lazy_static! {
 
 impl SiteData {
 
-    pub fn new(docs: &Vec<DocData>) -> anyhow::Result<Self> {
+    pub fn new(docs: &Vec<DocData>, no_target: &[String]) -> anyhow::Result<Self> {
         let mut url_to_slug = HashMap::new();
         let mut id_to_slug = HashMap::new();
         for doc in docs {
@@ -50,6 +52,7 @@ impl SiteData {
         Ok(SiteData {
             url_to_slug,
             id_to_slug,
+            no_target: no_target.iter().cloned().collect(),
         })
     }
 

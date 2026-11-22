@@ -43,7 +43,7 @@ pub fn rewrite_links(dom: &mut scraper::Html, site_data: &SiteData) -> Result<()
                     use std::hash::Hash;
                     let url = reqwest::Url::parse(href)?;
                     match url.host().unwrap() {
-                        url::Host::Domain(s) => {
+                        url::Host::Domain(s) if !site_data.no_target.contains(s) => {
                             let mut hasher = DefaultHasher::new();
                             s.hash(&mut hasher);
                             let h = hasher.finish();

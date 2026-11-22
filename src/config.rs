@@ -66,6 +66,9 @@ pub struct Config {
     pub credentials: Option<PathBuf>,
     pub concurrency: Option<usize>,
     pub default_author: Option<String>,
+    /// Domain names whose links must not get a `target` attribute
+    #[serde(default)]
+    pub no_target: Vec<String>,
 }
 
 fn default_download_dir() -> PathBuf {
