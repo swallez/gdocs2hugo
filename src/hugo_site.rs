@@ -20,5 +20,5 @@ pub struct FrontMatter {
     // not used in the publication process, but useful to distinguish generated pages
     pub gdoc_url: Option<String>,
     #[serde(flatten)]
-    pub other: BTreeMap<String, String>
+    pub other: BTreeMap<String, serde_yaml::Value>
 }

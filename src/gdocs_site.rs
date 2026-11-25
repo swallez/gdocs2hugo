@@ -83,8 +83,9 @@ pub struct DocData {
     // #[serde(rename="type")]
     // pub page_type: Option<String>,
     // pub layout: Option<String>,
-    #[serde(flatten)]
-    pub other: BTreeMap<String, String>
+    /// Values starting with '{' or '[' are parsed as YAML, others are strings.
+    #[serde(flatten, deserialize_with = "deser_other")]
+    pub other: BTreeMap<String, serde_yaml::Value>
 }
 
 impl DocData {
@@ -120,13 +121,62 @@ impl DocData {
                 doc.download_path = format!("{}.html", flat_slug).into();
 
                 // Remove empty "other" entries
-                doc.other.retain(|_, v| v.len() > 0);
+                doc.other.retain(|_, v| !v.is_null());
 
                 // Done
                 doc
             })
             .collect()
     }
+}
+
+/// A raw CSV cell. Inside a `#[serde(flatten)]` field, the csv crate guesses the type of values
+/// instead of always giving strings, so numbers and booleans have to be accepted and turned back
+/// into text.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawCell {
+    Str(String),
+    Bool(bool),
+    Int(i64),
+    UInt(u64),
+    Float(f64),
+}
+
+impl RawCell {
+    fn into_string(self) -> String {
+        match self {
+            RawCell::Str(s) => s,
+            RawCell::Bool(b) => b.to_string(),
+            RawCell::Int(i) => i.to_string(),
+            RawCell::UInt(i) => i.to_string(),
+            RawCell::Float(f) => f.to_string(),
+        }
+    }
+}
+
+/// Deserializes the "other" columns. Values starting with '{' or '[' are parsed as YAML,
+/// any other value is kept as a string.
+fn deser_other<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<String, serde_yaml::Value>, D::Error> {
+    let raw = BTreeMap::<String, RawCell>::deserialize(deserializer)?;
+    raw.into_iter()
+        .map(|(k, v)| {
+            let v = v.into_string();
+            let value: serde_yaml::Value = match v {
+                v if v.starts_with('{') || v.starts_with('[') => {
+                    serde_yaml::from_str(&v)
+                        .map_err(|e| serde::de::Error::custom(format!("Invalid YAML in column '{}': {}", k, e)))?
+                },
+                v if v == "TRUE" => serde_yaml::Value::Bool(true),
+                v if v == "FALSE" => serde_yaml::Value::Bool(false),
+                v if v.is_empty() => serde_yaml::Value::Null,
+                v => serde_yaml::Value::String(v)
+            };
+            Ok((k, value))
+        })
+        .collect()
 }
 
 fn deser_uppercase_bool<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
@@ -179,6 +229,74 @@ pub fn get_doc_id(url: &str) -> Option<&str> {
 
 #[cfg(test)]
 mod test {
+
+    use serde_yaml::Value;
+
+    /// Reads a single-row CSV (after the human-readable header line) and returns its "other" map.
+    fn read_other(columns: &[(&str, &str)]) -> anyhow::Result<std::collections::BTreeMap<String, Value>> {
+        fn quote(s: &str) -> String {
+            format!("\"{}\"", s.replace('"', "\"\""))
+        }
+        let header = format!("title,slug,publish,{}", columns.iter().map(|c| c.0).collect::<Vec<_>>().join(","));
+        let row = format!("A,/a,TRUE,{}", columns.iter().map(|c| quote(c.1)).collect::<Vec<_>>().join(","));
+        let csv = format!("{}\nT,S,P\n{}\n", header, row);
+        let mut docs = super::DocData::read_csv(csv.as_bytes())?;
+        Ok(docs.remove(0).other)
+    }
+
+    fn yaml(s: &str) -> Value {
+        serde_yaml::from_str(s).unwrap()
+    }
+
+    #[test]
+    fn test_other_plain_string() {
+        let other = read_other(&[("layout", "wide"), ("other", "some text"), ("num", "42"), ("neg", "-7"), ("float", "1.5"), ("lower", "true")]).unwrap();
+        assert_eq!(other["layout"], Value::String("wide".into()));
+        assert_eq!(other["other"], Value::String("some text".into()));
+        // Numbers and booleans guessed by the csv crate are kept as text
+        assert_eq!(other["num"], Value::String("42".into()));
+        assert_eq!(other["neg"], Value::String("-7".into()));
+        assert_eq!(other["float"], Value::String("1.5".into()));
+        assert_eq!(other["lower"], Value::String("true".into()));
+    }
+
+    #[test]
+    fn test_other_yaml_list_and_map() {
+        let other = read_other(&[("tags", "[x, y]"), ("layout", "{a: 1, b: [c, d]}")]).unwrap();
+        assert_eq!(other["tags"], yaml("[x, y]"));
+        assert_eq!(other["layout"], yaml("{a: 1, b: [c, d]}"));
+        assert!(other["tags"].is_sequence());
+        assert!(other["layout"].is_mapping());
+    }
+
+    #[test]
+    fn test_other_uppercase_bool() {
+        let other = read_other(&[("yes", "TRUE"), ("no", "FALSE"), ("mixed", "True")]).unwrap();
+        assert_eq!(other["yes"], Value::Bool(true));
+        assert_eq!(other["no"], Value::Bool(false));
+        // Only the exact uppercase spelling used by Google Sheets is a boolean
+        assert_eq!(other["mixed"], Value::String("True".into()));
+    }
+
+    #[test]
+    fn test_other_empty_removed() {
+        let other = read_other(&[("empty", ""), ("kept", "x")]).unwrap();
+        assert!(!other.contains_key("empty"));
+        assert_eq!(other["kept"], Value::String("x".into()));
+    }
+
+    #[test]
+    fn test_other_invalid_yaml() {
+        let err = read_other(&[("tags", "[unclosed")]).unwrap_err();
+        assert!(err.to_string().contains("tags"), "error should name the column: {}", err);
+    }
+
+    #[test]
+    fn test_other_leading_space_is_string() {
+        // The check is on the first character, no trimming
+        let other = read_other(&[("v", " [x]")]).unwrap();
+        assert_eq!(other["v"], Value::String(" [x]".into()));
+    }
 
     #[test]
     fn test_doc_id_extraction() {
