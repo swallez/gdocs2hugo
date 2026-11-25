@@ -6,60 +6,52 @@ version = "0.1.0"
 
 [dependencies]
 # Base stuff
-anyhow = { version = "1.0", features = ["backtrace"] }
+anyhow = { version = "1", features = ["backtrace"] }
 chrono = { version = "0.4", features = ["serde"] }
-indoc = "2.0.1"
-itertools = "0.10.3"
-lazy_static = "1.4.0"
-maplit = "1.0.2"
-regex = "1.6.0"
+indoc = "2"
+itertools = "0.10"
+lazy_static = "1.4"
+maplit = "1"
+regex = "1"
 lazy-regex = "3"
-clap = { version="3.2.17", features = ["derive"] }
-rayon = "1.5.3"
-backtrace-on-stack-overflow = "0.3.0"
+clap = { version="3", features = ["derive"] }
+rayon = "1"
+backtrace-on-stack-overflow = "0.3"
 
 # Serde and formats
-serde = {version = "1.0.142" }
-serde_derive = {version = "1.0.142" }
-csv = "1.1.6"
-serde_yaml = "0.9.4"
-serde_json = "1.0"
+serde = {version = "1" }
+serde_derive = {version = "1" }
+csv = "1"
+serde_yaml = "0.9"
+serde_json = "1"
 
 # HTML and CSS parsing
-html5ever = "0.26.0"
-xml5ever = "0.17.0"
-markup5ever = "0.11.0"
-cssparser = "0.29.6"
-string_cache = "0.8.4"
+html5ever = "0.26"
+markup5ever = "0.11"
 
-scraper = "0.16.0"
-selectors = "*"
-ego-tree = "*"
-tendril = "*"
-#markup5ever = "*"
+scraper = "0.16"
+tendril = "0.4"
 
 glob = "0.3"
 
-nom="7.1.1"
-
 # HTTP
-reqwest = {version = "0.11.11", features = ["blocking"] }
-url = "2.2"
+reqwest = {version = "0.11", features = ["blocking"] }
+url = "2"
 hyper014 = { package = "hyper", version = "0.14", features = ["client"] }
 hyper-rustls = {version = "0.24", features = ["http1", "http2"] }
 tokio = { version = "*", features = ["rt-multi-thread"] }
-bytes = "*"
-mime_guess = "2.0.4"
+bytes = "1"
+mime_guess = "2"
 http = "0.2"
 
 # Used for images
-image = "0.24.3"
+image = "0.24"
 
 ## Google docs
-google-docs1 = "5.0.2"
-google-drive3 = "5.0.2"
-google-sheets4 = "5.0.2"
+google-docs1 = "5"
+google-drive3 = "5"
+google-sheets4 = "5"
 
 [dev-dependencies]
-insta = { version = "1.24.1", features = ["yaml"] }
+insta = { version = "1", features = ["yaml"] }
 testresult = "0.3.0"
