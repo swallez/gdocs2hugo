@@ -10,17 +10,17 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 pub struct RootCommand {
     /// Path to the config file
-    #[clap(global = true, long, default_value = "gdocs2hugo.yml")]
+    #[arg(global = true, long, default_value = "gdocs2hugo.yml")]
     pub config: PathBuf,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub command: Commands,
 }
 
 impl RootCommand {
     // Avoids importing Clap in main and solves some IntelliJ type inference issue
     pub fn read() -> RootCommand {
-        RootCommand::from_args()
+        RootCommand::parse()
     }
 }
 
@@ -29,17 +29,17 @@ pub enum Commands {
     /// Download gdocs content
     Download {
         /// Download all pages (ignore publication status)
-        #[clap(long)]
+        #[arg(long)]
         all: bool,
     },
 
     /// Publish downloaded gdocs content to the Hugo content dir
     Publish {
         /// Download gdocs content before publishing
-        #[clap(long)]
+        #[arg(long)]
         download: bool,
         /// Publish all pages (ignore publication status)
-        #[clap(long)]
+        #[arg(long)]
         all: bool,
     },
     Gdoc,
@@ -47,10 +47,10 @@ pub enum Commands {
     /// Publish downloaded gdocs content to the Hugo content dir
     Publish2 {
         /// Keep a copy of json docs and raw images
-        #[clap(long)]
+        #[arg(long)]
         store: bool,
         /// Publish all pages (ignore publication status)
-        #[clap(long)]
+        #[arg(long)]
         all: bool,
     },
 }

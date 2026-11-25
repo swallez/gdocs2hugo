@@ -10,7 +10,8 @@ use anyhow::Context;
 use anyhow::{anyhow, bail};
 use bytes::Buf;
 use google_drive3::api::Scope;
-use hyper014::client::HttpConnector;
+use http_body_util::{BodyExt, Empty};
+use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use indoc::indoc;
 use tendril::fmt::Slice;
@@ -66,11 +67,11 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
                     .ok_or_else(|| anyhow!("Failed to extract doc id from {:?}", site_doc.gdoc_url))?;
 
                 let bytes: bytes::Bytes = tokio::runtime::Handle::current().block_on(async {
-                    let mut response = gdrive_api.files()
+                    let response = gdrive_api.files()
                         .export(sheet_id, "text/csv")
                         .add_scope(Scope::Readonly) // Otherwise we'll get a 404
                         .doit().await?;
-                    let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
+                    let bytes = response.into_body().collect().await?.to_bytes();
                     <Result<_>>::Ok(bytes)
                 })
                     .context("Failed to download data document")?;
@@ -271,11 +272,11 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
     println!("Downloading ToC from GSheet id={}", toc_id);
 
     let bytes: bytes::Bytes = tokio::runtime::Handle::current().block_on(async {
-            let mut response = gdrive.files()
+            let response = gdrive.files()
                 .export(toc_id, "text/csv")
                 .add_scope(Scope::Readonly) // Otherwise we'll get a 404
                 .doit().await?;
-            let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
+            let bytes = response.into_body().collect().await?.to_bytes();
             <Result<_>>::Ok(bytes)
         })
         .context("Failed to download ToC spreadsheet")?;
@@ -309,20 +310,15 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
 ///
 pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_docs1::Docs<HyperC>> {
 
-    let creds = google_docs1::oauth2::read_service_account_key(creds_path).await
+    let creds = google_docs1::yup_oauth2::read_service_account_key(creds_path).await
         .context("Problem loading credentials")?;
 
-    let connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_or_http()
-        .enable_all_versions()
-        .build();
+    let client = new_http_client()?;
 
-    let client = hyper014::Client::builder()
-        .build::<_, hyper014::Body>(connector);
-
-    let auth = google_docs1::oauth2::ServiceAccountAuthenticator::builder(creds)
-        .hyper_client(client.clone())
+    let auth = google_docs1::yup_oauth2::ServiceAccountAuthenticator::with_client(
+            creds,
+            google_docs1::yup_oauth2::client::CustomHyperClientBuilder::from(new_http_client::<String>()?),
+        )
         .build()
         .await
         .context("Problem creating GDocs client")?;
@@ -334,26 +330,40 @@ pub async fn create_gdocs_client(creds_path: impl AsRef<Path>) -> Result<google_
 
 pub type HyperC = HttpsConnector<HttpConnector>;
 
+/// Create the HTTP client shared by the Google APIs
+fn new_http_client<B>() -> Result<hyper_util::client::legacy::Client<HyperC, B>>
+where
+    B: hyper::body::Body + Send + 'static + Unpin,
+    B::Data: Send,
+    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+{
+    let connector = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .context("Problem loading native TLS roots")?
+        .https_or_http()
+        .enable_http1()
+        .enable_http2()
+        .build();
+
+    Ok(hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build(connector))
+}
+
 //--------------------------------------------------------------------------------------------------
 ///
 /// Create the Google Docs client
 ///
 pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google_drive3::DriveHub<HyperC>> {
 
-    let creds = google_drive3::oauth2::read_service_account_key(creds_path).await
+    let creds = google_drive3::yup_oauth2::read_service_account_key(creds_path).await
         .context("Problem loading credentials")?;
 
-    let connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_or_http()
-        .enable_all_versions()
-        .build();
+    let client = new_http_client()?;
 
-    let client = hyper014::Client::builder()
-        .build::<_, hyper014::Body>(connector);
-
-    let auth = google_drive3::oauth2::ServiceAccountAuthenticator::builder(creds)
-        .hyper_client(client.clone())
+    let auth = google_drive3::yup_oauth2::ServiceAccountAuthenticator::with_client(
+            creds,
+            google_drive3::yup_oauth2::client::CustomHyperClientBuilder::from(new_http_client::<String>()?),
+        )
         .build()
         .await
         .context("Problem creating GDocs client")?;
@@ -368,7 +378,7 @@ pub async fn create_gdrive_client(creds_path: impl AsRef<Path>) -> Result<google
 pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow::Result<(&'static str, bytes::Bytes)> {
 
     use google_docs1::api::Scope;
-    use google_docs1::client;
+    use google_docs1::common as client;
     use http::header::AUTHORIZATION;
     use http::header::USER_AGENT;
     use http::header::CONTENT_TYPE;
@@ -383,20 +393,20 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
 
     // Follow redirects manually, as the hyper client doesn't do it.
     const MAX_REDIRECTS: usize = 10;
-    let original_uri: hyper014::Uri = url.parse()?;
+    let original_uri: http::Uri = url.parse()?;
     let mut current_url = url.to_string();
     let mut redirects = 0;
 
-    let mut response = loop {
+    let response = loop {
         let client = &hub.client;
 
-        let uri: hyper014::Uri = current_url.parse()?;
+        let uri: http::Uri = current_url.parse()?;
 
         // Only send credentials to the original host, not to redirect targets on other hosts
         let same_host = uri.host() == original_uri.host();
 
-        let mut request = hyper014::Request::builder()
-            .method(hyper014::Method::GET)
+        let mut request = http::Request::builder()
+            .method(http::Method::GET)
             .uri(uri)
             .header(USER_AGENT, "google-api-rust-client/3.1.0");
 
@@ -404,7 +414,7 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
             request = request.header(AUTHORIZATION, format!("Bearer {}", token));
         }
 
-        let request = request.body(hyper014::body::Body::empty())?;
+        let request = request.body(Empty::<bytes::Bytes>::new().map_err(|e| match e {}).boxed())?;
 
         let response = client.request(request).await?;
 
@@ -438,7 +448,7 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
         extension = "jpg";
     }
 
-    let bytes = hyper014::body::to_bytes(response.body_mut()).await?;
+    let bytes = response.into_body().collect().await?.to_bytes();
 
     Ok((extension, bytes))
 }

@@ -10,8 +10,6 @@ use serde::{Deserialize, Deserializer};
 use chrono::{NaiveDateTime, Utc};
 use itertools::Itertools;
 use lazy_regex::regex;
-use lazy_static::lazy_static;
-use regex::Regex;
 
 pub fn download_toc(toc_url: &str, download_dir: &Path) -> anyhow::Result<Vec<DocData>> {
     fs::create_dir_all(download_dir).with_context(|| format!("Cannot create directory {:?}", download_dir))?;
@@ -215,14 +213,10 @@ fn deser_csv_date_option<'de, D: Deserializer<'de>>(
     }
 }
 
-lazy_static! {
-    static ref DOC_ID_RE: Regex =
-        Regex::new("^https://docs.google.com/(document|spreadsheets)(/u/[0-9]+)?/d/([^/]+)/").unwrap();
-}
-
 /// Extracts the document id, if any, from a GDocs URL
 pub fn get_doc_id(url: &str) -> Option<&str> {
-    DOC_ID_RE.captures(url)
+    regex!("^https://docs.google.com/(document|spreadsheets)(/u/[0-9]+)?/d/([^/]+)/")
+        .captures(url)
         .and_then(|captures| captures.get(3))
         .map(|m| m.as_str())
 }

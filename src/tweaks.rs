@@ -3,7 +3,6 @@ use std::hash::Hasher;
 use crate::hugo_site::FrontMatter;
 use scraper::Selector;
 use scraper::ElementRef;
-use html5ever::namespace_url;
 use anyhow::Result;
 use anyhow::bail;
 use itertools::Itertools;

@@ -9,12 +9,10 @@ version = "0.1.0"
 anyhow = { version = "1", features = ["backtrace"] }
 chrono = { version = "0.4", features = ["serde"] }
 indoc = "2"
-itertools = "0.10"
-lazy_static = "1.4"
-maplit = "1"
+itertools = "0.15"
 regex = "1"
 lazy-regex = "3"
-clap = { version="3", features = ["derive"] }
+clap = { version="4", features = ["derive"] }
 rayon = "1"
 backtrace-on-stack-overflow = "0.3"
 
@@ -26,32 +24,32 @@ serde_yaml = "0.9"
 serde_json = "1"
 
 # HTML and CSS parsing
-html5ever = "0.26"
-markup5ever = "0.11"
+html5ever = "0.40"
+markup5ever = "0.40"
 
-scraper = "0.16"
-tendril = "0.4"
+scraper = { version = "0.29", features = ["deterministic"] }
+tendril = "0.5"
 
 glob = "0.3"
 
 # HTTP
-reqwest = {version = "0.11", features = ["blocking"] }
+reqwest = {version = "0.13", features = ["blocking"] }
 url = "2"
-hyper014 = { package = "hyper", version = "0.14", features = ["client"] }
-hyper-rustls = {version = "0.24", features = ["http1", "http2"] }
+hyper = "1"
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "http2", "tokio"] }
+http-body-util = "0.1"
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "http2", "native-tokio", "aws-lc-rs"] }
 tokio = { version = "*", features = ["rt-multi-thread"] }
 bytes = "1"
 mime_guess = "2"
-http = "0.2"
+http = "1"
 
 # Used for images
-image = "0.24"
+image = "0.25"
 
 ## Google docs
-google-docs1 = "5"
-google-drive3 = "5"
-google-sheets4 = "5"
+google-docs1 = { version = "7", default-features = false, features = ["yup-oauth2-service-account", "aws-lc-rs"] }
+google-drive3 = { version = "7", default-features = false, features = ["yup-oauth2-service-account", "aws-lc-rs"] }
 
 [dev-dependencies]
 insta = { version = "1", features = ["yaml"] }
-testresult = "0.3.0"

@@ -4,7 +4,6 @@ extern crate serde_derive;
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail};
-use lazy_static::lazy_static;
 use gdocs_site::DateTimeWithDefault;
 
 pub mod config;
@@ -18,7 +17,6 @@ pub mod publish;
 pub mod html;
 mod tweaks;
 
-use regex::Regex;
 use crate::gdocs_site::DocData;
 
 #[derive(Default)]
@@ -27,10 +25,6 @@ pub struct SiteData {
     id_to_slug: HashMap<String, String>,
     /// Domain names whose links must not get a `target` attribute
     pub no_target: HashSet<String>,
-}
-
-lazy_static! {
-    static ref DOC_USER_RE: Regex = Regex::new("/document/u/[0-9]/").unwrap();
 }
 
 impl SiteData {
@@ -102,7 +96,7 @@ impl SiteData {
             } else {
                 // Legacy lookup, for "export to web" URLs
                 // Link urls may contain '/document/u/{id}/' that should just be '/document/'
-                let url = DOC_USER_RE.replace(url, "/document/");
+                let url = lazy_regex::regex!("/document/u/[0-9]/").replace(url, "/document/");
 
                 if let Some(slug) = self.url_to_slug.get(url.as_ref()) {
                     Ok(Some(format!("{}/", slug)))
