@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
-
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail};

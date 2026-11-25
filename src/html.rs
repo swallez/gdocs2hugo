@@ -82,17 +82,11 @@ impl <'a, Wr: Write> HtmlSerializer<'a, Wr> {
 }
 
 fn is_block_tag(name: &str) -> bool {
-    match name {
-        "body"| "head"| "div" | "ul" | "table" | "td" | "p" | "li" | "hr" => true,
-        _ => false
-    }
+    matches!(name, "body" | "head" | "div" | "ul" | "table" | "td" | "p" | "li" | "hr")
 }
 
 fn is_empty_tag(name: &str) -> bool {
-    match name {
-        "img" | "br" | "hr" => true,
-        _ => false,
-    }
+    matches!(name, "img" | "br" | "hr")
 }
 
 use itertools::Itertools;

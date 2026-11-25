@@ -52,8 +52,8 @@ impl <C: HtmlConsumer> HtmlConsumer for ImageRewriter<'_, C> {
             let id = attrs.get("id").ok_or(anyhow!("<img> tag with no 'id' attribute"))?;
 
             let img_ref = ImageReference {
-                id: id,
-                src: src
+                id,
+                src
             };
             let new_src: String = (self.resolver)(&img_ref);
             let mut new_attrs = attrs;
@@ -116,8 +116,8 @@ impl AttrTag {
     pub fn parse(text: &str) -> anyhow::Result<Option<(AttrTag, &str)>> {
         let mut text = text;
         if !text.starts_with("{: ") {
-            if text.starts_with("{::}") {
-                return Ok(Some((AttrTag::End, &text[4..])));
+            if let Some(rest) = text.strip_prefix("{::}") {
+                return Ok(Some((AttrTag::End, rest)));
             }
             return Ok(None);
         }
@@ -126,11 +126,11 @@ impl AttrTag {
 
         if let Some(end) = text.find("}") {
             let mut attrs = InlineAttributes::default();
-            let parts = (&text[..end]).trim().split(' ');
+            let parts = text[..end].trim().split(' ');
 
             attrs.classes = parts.map(String::from).collect();
 
-            return Ok(Some((AttrTag::Start(attrs), &text[end+1..])));
+            Ok(Some((AttrTag::Start(attrs), &text[end+1..])))
 
         } else {
             bail!("Missing closing '}}'");
@@ -174,7 +174,7 @@ pub fn render(
     };
 
     renderer.format_doc()?;
-    return Ok(renderer.html);
+    Ok(renderer.html)
 }
 
 struct HtmlRenderer <'a> {
@@ -255,7 +255,7 @@ impl <'a> HtmlRenderer<'a> {
         self.html.push_str(text);
 //        crate::html::write_escaped_fmt(&mut self.html, text, false)?;
         if !text.is_empty() {
-            self.last_is_nl = text.chars().last() == Some('\n');
+            self.last_is_nl = text.ends_with('\n');
         }
     }
 
@@ -364,10 +364,10 @@ impl <'a> HtmlRenderer<'a> {
 
     fn format_structural_element(&mut self, elt: &'a docs::StructuralElement, indent: &mut Indent) -> anyhow::Result<()>{
         if let Some(para) = &elt.paragraph {
-            self.format_paragraph(&para, indent)?;
+            self.format_paragraph(para, indent)?;
 
         } else if let Some(table) = &elt.table {
-            self.format_table(&table)?;
+            self.format_table(table)?;
 
         } else if let Some(section_break) = &elt.section_break {
             self.format_section_break(section_break);
@@ -424,7 +424,7 @@ impl <'a> HtmlRenderer<'a> {
         let txt = txt.replace('”', "\"").replace('’', "'");
 
         for mut code in txt.split("{{") {
-            if code.len() == 0 {
+            if code.is_empty() {
                 // Beginning of first shortcode
                 continue;
             }
@@ -437,7 +437,7 @@ impl <'a> HtmlRenderer<'a> {
             code = code.trim();
 
             // Find command
-            let (cmd, args) = code.split_once(' ').unwrap_or_else(|| (code, ""));
+            let (cmd, args) = code.split_once(' ').unwrap_or((code, ""));
 
             if cmd == "html" {
                 out.write_str(args)?;
@@ -584,7 +584,7 @@ impl <'a> HtmlRenderer<'a> {
 
         // Union
         if let Some(text) = &elt.text_run {
-            self.format_text_run(&text);
+            self.format_text_run(text);
 
         } else if let Some(auto_text) = &elt.auto_text {
             unimplemented!("Auto text {}", auto_text.type_.as_ref().map_or("", |s| s.as_str()));
@@ -769,17 +769,17 @@ impl <'a> HtmlRenderer<'a> {
         // Start <span> if we have custom styles. We do not add style on a surrounding tag, as it
         // may conflict with that tag's default styling (e.g. strike-through in <del> may be
         // overriden by an underlined style)
-        if style_attr.len() > 0 {
+        if !style_attr.is_empty() {
             self.start_tag("span", &[("style", &style_attr)]);
         }
 
         // Content
         if let Some(content) = &text.content {
-            self.content(&content);
+            self.content(content);
         }
 
         // Close <span>
-        if style_attr.len() > 0 {
+        if !style_attr.is_empty() {
             self.end_tag();
         }
 
@@ -810,7 +810,7 @@ impl <'a> HtmlRenderer<'a> {
             for row in rows {
                 *self += "<tr>\n";
                 if let Some(cells) = &row.table_cells {
-                    if skips.len() == 0 {
+                    if skips.is_empty() {
                         // First line: resize to the width of the table
                         skips.resize(cells.len(), 0);
                     }
@@ -831,8 +831,8 @@ impl <'a> HtmlRenderer<'a> {
                         *self += "<td";
                         if colspan > 1 {
                             // Skip some following cells on this row
-                            for i in col+1..col+colspan {
-                                skips[i] += 1;
+                            for skip in &mut skips[col+1..col+colspan] {
+                                *skip += 1;
                             }
                             *self += format!(" colspan='{}'", colspan);
                         }
@@ -919,9 +919,9 @@ mod tests {
             Some((AttrTag::Start(attrs), s)) => {
                 assert_eq!(attrs.to_string(), " class='x y z'");
                 assert_eq!(s, "blah");
-                return Ok(())
+                Ok(())
             },
-            _ => return Err(anyhow!("expecting a start tag")),
+            _ => Err(anyhow!("expecting a start tag")),
         }
     }
 

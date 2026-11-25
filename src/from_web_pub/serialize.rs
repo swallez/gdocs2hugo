@@ -46,7 +46,7 @@ impl<Wr: std::io::Write> Serializer for StableHtmlSerializer<Wr> {
     fn write_comment(&mut self, text: &str) -> io::Result<()> {
         if text.starts_with("{{<") {
             self.writer.write(text.as_bytes()).map(|_| ())?;
-            self.writer.write(&[b'\n']).map(|_| ())
+            self.writer.write(b"\n").map(|_| ())
         } else {
             let mut inner = HtmlSerializer::new(&mut self.writer, self.opts.clone());
             inner.write_comment(text)

@@ -6,11 +6,12 @@ use crate::gdoc_to_html;
 use std::fs;
 use std::path::Path;
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use anyhow::Context;
 use anyhow::{anyhow, bail};
 use bytes::Buf;
 use google_drive3::api::Scope;
-use http_body_util::{BodyExt, Empty};
+use http_body_util::BodyExt;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use indoc::indoc;
@@ -98,7 +99,7 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
             }
 
             //----- Load doc JSON
-            let gdoc = download_gdoc_json(&site_doc, &config, &gdocs_api, &rt, store)?;
+            let gdoc = download_gdoc_json(&site_doc, config, &gdocs_api, &rt, store)?;
 
             //----- Convert doc JSON to HTML and DOM
             let html = gdoc_to_html::render(&gdoc)?;
@@ -107,8 +108,8 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
                 let doc_path = &config.download_dir
                     .join(rel_path_or_index(&site_doc.slug))
                     .with_extension("html");
-                fs::write(&doc_path, &html)
-                    .with_context(|| format!("Failed to write html rendering {:?}", &doc_path))?;
+                fs::write(doc_path, &html)
+                    .with_context(|| format!("Failed to write html rendering {:?}", doc_path))?;
 
                 //println!("Saved rendered html to {:?}", doc_path);
             }
@@ -142,8 +143,8 @@ pub fn publish(config: &config::Config, store: bool, all: bool) -> Result<()> {
 
             //----- Apply tweaks
 
-            tweak_dom(&gdocs_api, &doc_id, &mut dom, &mut fm, &site_data, &config, store)
-                .with_context(|| format!("GDoc id: {}", &doc_id))?;
+            tweak_dom(&gdocs_api, &doc_id, &mut dom, &mut fm, &site_data, config, store)
+                .with_context(|| format!("GDoc id: {}", doc_id))?;
 
             //----- And store to its final location
 
@@ -181,8 +182,8 @@ pub fn write_doc(dom: &scraper::Html, fm: &FrontMatter, site_data: &SiteData, hu
         hugo_dir.join(format!("content/posts{}.html", doc_slug))
     };
 
-    let cleaned_html = crate::from_web_pub::serialize::stable_html(&dom)?;
-    println!("Writing {:?}", &post_path);
+    let cleaned_html = crate::from_web_pub::serialize::stable_html(dom)?;
+    println!("Writing {:?}", post_path);
 
     fs::create_dir_all(post_path.parent().unwrap())?;
 
@@ -199,7 +200,7 @@ pub fn write_doc(dom: &scraper::Html, fm: &FrontMatter, site_data: &SiteData, hu
             serde_yaml::to_string(&fm)?,
             &cleaned_html
         ),
-    ).with_context(|| format!("Cannot write to {:?}", &post_path))?;
+    ).with_context(|| format!("Cannot write to {:?}", post_path))?;
 
     Ok(())
 }
@@ -217,7 +218,7 @@ pub fn tweak_dom(gdocs_api: &google_docs1::Docs<HyperC>, _doc_id: &str, dom: &mu
             img,
             fm.url.as_ref().unwrap(),
             &config.hugo_site_dir,
-            store.then(|| config.download_dir.as_path()))
+            store.then_some(config.download_dir.as_path()))
     )?;
 
     tweaks::rewrite_links(dom, site_data)?;
@@ -286,8 +287,8 @@ pub fn download_toc (config: &config::Config, gdrive: &google_drive3::DriveHub<H
         std::fs::create_dir_all(&config.download_dir)?;
         let toc_path = &config.download_dir.join("pages.csv");
         let byte_array = bytes.as_bytes();
-        fs::write(&toc_path, &byte_array)
-            .with_context(|| format!("Failed to write ToC spreadsheet {:?}", &toc_path))?;
+        fs::write(toc_path, byte_array)
+            .with_context(|| format!("Failed to write ToC spreadsheet {:?}", toc_path))?;
 
         println!("Saved table of contents to {:?}", toc_path);
     }
@@ -379,76 +380,41 @@ pub async fn download_url(hub: &google_docs1::Docs<HyperC>, url: &str) -> anyhow
 
     use google_docs1::api::Scope;
     use google_docs1::common as client;
-    use http::header::AUTHORIZATION;
-    use http::header::USER_AGENT;
-    use http::header::CONTENT_TYPE;
+
+    static HTTP_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(reqwest::Client::new);
 
     // Downloading images embedded in documents requires Google Drive read access
     let token = match hub.auth.get_token(&[Scope::DriveReadonly.as_ref()]).await {
-        Ok(token) => token.clone(),
+        Ok(token) => token,
         Err(err) => {
             bail!(client::Error::MissingToken(err))
         }
     };
 
-    // Follow redirects manually, as the hyper client doesn't do it.
-    const MAX_REDIRECTS: usize = 10;
-    let original_uri: http::Uri = url.parse()?;
-    let mut current_url = url.to_string();
-    let mut redirects = 0;
-
-    let response = loop {
-        let client = &hub.client;
-
-        let uri: http::Uri = current_url.parse()?;
-
-        // Only send credentials to the original host, not to redirect targets on other hosts
-        let same_host = uri.host() == original_uri.host();
-
-        let mut request = http::Request::builder()
-            .method(http::Method::GET)
-            .uri(uri)
-            .header(USER_AGENT, "google-api-rust-client/3.1.0");
-
-        if let (Some(token), true) = (&token, same_host) {
-            request = request.header(AUTHORIZATION, format!("Bearer {}", token));
-        }
-
-        let request = request.body(Empty::<bytes::Bytes>::new().map_err(|e| match e {}).boxed())?;
-
-        let response = client.request(request).await?;
-
-        if response.status().is_redirection() {
-            let location = response.headers().get(http::header::LOCATION)
-                .and_then(|l| l.to_str().ok())
-                .ok_or_else(|| anyhow!("Redirect without Location header for {}", current_url))?;
-
-            redirects += 1;
-            if redirects > MAX_REDIRECTS {
-                bail!("Too many redirects for {}", url);
-            }
-
-            // Resolve relative locations against the current URL
-            current_url = reqwest::Url::parse(&current_url)?.join(location)?.to_string();
-            continue;
-        }
-
-        break response;
-    };
+    // reqwest follows redirects, and strips the Authorization header when redirected to another host.
+    let mut request = HTTP_CLIENT.get(url);
+    if let Some(token) = token {
+        request = request.bearer_auth(token);
+    }
+    let response = request.send().await?;
 
     if !response.status().is_success() {
         bail!("HTTP failure: {} for {}", response.status(), url);
     }
 
-    let content_type = response.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
-    let mut extension = mime_guess::get_mime_extensions_str(content_type).unwrap()[0];
+    let content_type = response.headers().get(reqwest::header::CONTENT_TYPE)
+        .ok_or_else(|| anyhow!("No content type for {}", url))?
+        .to_str()?;
+    let mut extension = mime_guess::get_mime_extensions_str(content_type)
+        .and_then(|exts| exts.first().copied())
+        .ok_or_else(|| anyhow!("Unknown content type {} for {}", content_type, url))?;
     if extension == "jpe" {
         // jpe is the first extension listed for jpeg. Although it's a valid extension, not all
         // tools recognize it.
         extension = "jpg";
     }
 
-    let bytes = response.into_body().collect().await?.to_bytes();
+    let bytes = response.bytes().await?;
 
     Ok((extension, bytes))
 }
@@ -475,7 +441,7 @@ pub fn download_gdoc_json (
         .with_context(|| format!("{} - Failed to load document.", site_doc.slug))?
         .1;
 
-    println!("Downloading GDoc for page at {} (id={})", &site_doc.slug, &doc_id);
+    println!("Downloading GDoc for page at {} (id={})", site_doc.slug, doc_id);
 
     if store {
         let json_path = config.download_dir

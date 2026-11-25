@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use rayon::prelude::*;
 use std::fs;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use chrono::{NaiveDateTime, Utc};
 use itertools::Itertools;
 use lazy_regex::regex;
@@ -20,7 +20,7 @@ pub fn download_toc(toc_url: &str, download_dir: &Path) -> anyhow::Result<Vec<Do
         .context("Failed to download ToC spreadsheet")?;
 
     let toc_path = download_dir.join("pages.csv");
-    fs::write(&toc_path, &csvtext).with_context(|| format!("Failed to write ToC spreadsheet {:?}", &toc_path))?;
+    fs::write(&toc_path, &csvtext).with_context(|| format!("Failed to write ToC spreadsheet {:?}", toc_path))?;
 
     let docs = DocData::read_csv(csvtext.as_bytes())?;
 
@@ -32,7 +32,7 @@ pub fn download_html_docs(docs: &Vec<DocData>, download_dir: &Path, all: bool) -
     docs.par_iter()
         .map(|doc| {
             let _guard = rt.as_ref().map(|rt| rt.enter());
-            download_html_doc(&doc, download_dir, all)
+            download_html_doc(doc, download_dir, all)
         })
         .collect::<anyhow::Result<Vec<()>>>()?; // Report any error downloading docs
     Ok(())
@@ -46,7 +46,7 @@ fn download_html_doc(doc: &DocData, download_dir: &Path, all: bool) -> anyhow::R
 
     println!("Downloading doc for '{}'", doc.slug);
 
-    let content = reqwest::blocking::get(&format!("{}?embedded=true", &doc.gdoc_pub_url.as_ref().unwrap()))
+    let content = reqwest::blocking::get(format!("{}?embedded=true", doc.gdoc_pub_url.as_ref().unwrap()))
         .with_context(|| format!("Failed to download {}", doc.slug))?
         .text()?;
 

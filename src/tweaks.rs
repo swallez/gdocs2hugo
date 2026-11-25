@@ -118,7 +118,7 @@ pub fn import_img_elts(doc: &mut scraper::Html, resolver: impl Fn(&ImageReferenc
     // Collect all <img> ids and src attributes
     let ids_and_src = doc
         .select(&selector)
-        .map(|elt| {
+        .filter_map(|elt| {
             let src = elt.value().attrs.get(&qname!("src")).unwrap().to_string();
             if src.starts_with("/") {
                 // local path to a static asset added with the {{ html }} shortcode.
@@ -129,7 +129,6 @@ pub fn import_img_elts(doc: &mut scraper::Html, resolver: impl Fn(&ImageReferenc
                 Some((elt.id(), img_id, src))
             }
         })
-        .flatten()
         .collect::<Vec<_>>();
 
     // Parallel import all images and rewrite src
@@ -186,16 +185,15 @@ pub fn move_bootstrap_btn_classes(doc: &mut scraper::Html) -> Result<()> {
             if let Element(div_elt) = div_node.value() {
                 let new_div_class = div_elt.attrs.get_mut(&qname!("class")).unwrap()
                     .split_whitespace()
-                    .map(|class| {
+                    .filter(|class| {
                         if class.starts_with("btn") {
                             btn_classes.push_slice(" ");
                             btn_classes.push_slice(class);
-                            None
+                            false
                         } else {
-                            Some(class)
+                            true
                         }
                     })
-                    .flatten()
                     .join(" ");
 
                 div_elt.attrs.insert(qname!("class"), new_div_class.into());

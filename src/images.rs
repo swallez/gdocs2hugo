@@ -19,7 +19,7 @@ pub fn download_and_store(
     let base_path = base_path.as_ref();
 
     // Only download if there's no file starting with `base_path`
-    if let Some(Result::Ok(path)) = glob::glob(&format!("{}.*", &base_path.display()))?.next() {
+    if let Some(Result::Ok(path)) = glob::glob(&format!("{}.*", base_path.display()))?.next() {
         // println!("Already downloaded image {:?}", &base_path);
         match path.extension() {
             Some(ext) if ext == "jpg" => return Ok("jpg"),
